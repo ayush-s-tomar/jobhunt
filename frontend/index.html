@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JobHunt</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0d0f14;--surface:#161920;--surface2:#1e2230;--border:#262b3a;
+  --text:#e8eaf0;--muted:#6b7280;--accent:#6c63ff;--accent2:#a78bfa;
+  --green:#22c55e;--amber:#f59e0b;--red:#ef4444;--cyan:#06b6d4;
+  --font:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;--radius:10px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;}
+
+/* ── Auth screens ── */
+.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+.auth-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:36px;width:100%;max-width:400px;}
+.auth-logo{font-weight:700;font-size:22px;color:var(--accent2);text-align:center;margin-bottom:6px;}
+.auth-logo span{color:var(--accent);}
+.auth-sub{color:var(--muted);font-size:13px;text-align:center;margin-bottom:28px;}
+.auth-tabs{display:flex;gap:4px;background:var(--surface2);border-radius:8px;padding:4px;margin-bottom:24px;}
+.auth-tab{flex:1;text-align:center;padding:7px;border-radius:6px;font-size:13px;color:var(--muted);cursor:pointer;transition:.12s;}
+.auth-tab.active{background:var(--surface);color:var(--text);font-weight:500;}
+.form-group{margin-bottom:14px;}
+.form-group label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px;font-weight:500;}
+.form-group input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;color:var(--text);font-size:13px;outline:none;font-family:var(--font);}
+.form-group input:focus{border-color:var(--accent);}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:var(--surface2);color:var(--text);transition:.15s;width:100%;}
+.btn:hover{background:var(--accent);border-color:var(--accent);color:#fff;}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+.btn-primary:hover{background:var(--accent2);border-color:var(--accent2);}
+.btn-sm{padding:5px 12px;font-size:12px;width:auto;}
+.btn-danger{border-color:var(--red);color:var(--red);}
+.btn-danger:hover{background:var(--red);border-color:var(--red);color:#fff;}
+.auth-err{color:var(--red);font-size:12px;text-align:center;margin-top:10px;min-height:18px;}
+.auth-ok{color:var(--green);font-size:12px;text-align:center;margin-top:10px;min-height:18px;}
+
+/* ── Layout ── */
+.layout{display:grid;grid-template-columns:220px 1fr 300px;grid-template-rows:56px 1fr;height:100vh;}
+.topbar{grid-column:1/-1;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid var(--border);background:var(--surface);gap:16px;}
+.sidebar{border-right:1px solid var(--border);background:var(--surface);padding:16px 12px;overflow-y:auto;}
+.main{overflow-y:auto;padding:20px;}
+.panel{border-left:1px solid var(--border);background:var(--surface);padding:16px;overflow-y:auto;}
+.logo{font-weight:700;font-size:15px;letter-spacing:-.3px;color:var(--accent2);}
+.logo span{color:var(--accent);}
+.topbar-stats{display:flex;gap:20px;margin-left:24px;}
+.tstat{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px;}
+.tstat strong{color:var(--text);}
+.topbar-actions{margin-left:auto;display:flex;gap:8px;align-items:center;}
+.user-chip{display:flex;align-items:center;gap:8px;padding:5px 12px;background:var(--surface2);border-radius:20px;font-size:12.5px;color:var(--muted);}
+.user-chip strong{color:var(--text);}
+
+/* ── Nav ── */
+.nav-label{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin:16px 8px 8px;}
+.nav-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;color:var(--muted);cursor:pointer;font-size:13px;transition:.12s;margin-bottom:2px;}
+.nav-item:hover,.nav-item.active{background:var(--surface2);color:var(--text);}
+.nav-item.active{color:var(--accent2);}
+.nav-badge{margin-left:auto;background:var(--accent);color:#fff;font-size:10px;font-weight:600;padding:1px 6px;border-radius:20px;}
+
+/* ── Tabs / filter ── */
+.tabs{display:flex;gap:4px;margin-bottom:16px;background:var(--surface2);border-radius:var(--radius);padding:4px;}
+.tab{flex:1;text-align:center;padding:6px 10px;border-radius:7px;font-size:12.5px;color:var(--muted);cursor:pointer;transition:.12s;}
+.tab.active{background:var(--surface);color:var(--text);font-weight:500;}
+.filter-bar{display:flex;gap:8px;margin-bottom:16px;}
+.search-wrap{flex:1;position:relative;}
+.search-wrap input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 12px 8px 34px;color:var(--text);font-size:13px;outline:none;}
+.search-wrap input:focus{border-color:var(--accent);}
+.search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px;pointer-events:none;}
+.select{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;color:var(--text);font-size:12.5px;outline:none;cursor:pointer;}
+
+/* ── Job cards ── */
+.jobs-grid{display:flex;flex-direction:column;gap:10px;}
+.job-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;cursor:pointer;transition:.15s;position:relative;}
+.job-card:hover{border-color:var(--accent);}
+.job-card.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
+.job-card.top-match{border-color:var(--accent2);}
+.top-match-ribbon{position:absolute;top:-1px;right:12px;background:var(--accent2);color:#fff;font-size:10px;font-weight:600;padding:3px 8px;border-radius:0 0 6px 6px;}
+.card-header{display:flex;align-items:flex-start;gap:10px;margin-bottom:8px;}
+.company-avatar{width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#fff;flex-shrink:0;}
+.card-title-wrap{flex:1;min-width:0;}
+.card-title{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.card-company{color:var(--muted);font-size:12px;margin-top:1px;}
+.card-salary{font-family:var(--mono);font-size:12px;font-weight:500;color:var(--green);white-space:nowrap;flex-shrink:0;}
+.card-meta{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+.pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;}
+.pill-pub{background:rgba(34,197,94,.15);color:var(--green);}
+.pill-priv{background:rgba(167,139,250,.15);color:var(--accent2);}
+.pill-remote{background:rgba(6,182,212,.12);color:var(--cyan);}
+.pill-loc{background:rgba(245,158,11,.1);color:var(--amber);}
+.pill-skill{background:var(--surface2);color:var(--muted);font-size:10.5px;}
+.card-skills{display:flex;flex-wrap:wrap;gap:4px;}
+.card-footer{display:flex;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);}
+.score-bar-wrap{flex:1;display:flex;align-items:center;gap:8px;}
+.score-bar{flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden;}
+.score-fill{height:100%;border-radius:2px;}
+.score-label{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap;}
+.card-actions{display:flex;gap:6px;}
+.card-time{color:var(--muted);font-size:11px;}
+.status-badge{padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:600;}
+.s-new{background:rgba(107,114,128,.15);color:var(--muted);}
+.s-saved{background:rgba(245,158,11,.12);color:var(--amber);}
+.s-confirmed{background:rgba(108,99,255,.15);color:var(--accent2);}
+.s-applied{background:rgba(34,197,94,.12);color:var(--green);}
+.s-interview{background:rgba(6,182,212,.12);color:var(--cyan);}
+.s-rejected{background:rgba(239,68,68,.1);color:var(--red);}
+
+/* ── Right panel ── */
+.panel-section{margin-bottom:20px;}
+.panel-title{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px;}
+.source-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;margin-bottom:4px;}
+.source-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.source-name{flex:1;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.source-count{font-family:var(--mono);font-size:11px;color:var(--muted);}
+.pipeline-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.pipeline-label{font-size:12px;color:var(--muted);width:72px;flex-shrink:0;}
+.pipeline-bar{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;}
+.pipeline-fill{height:100%;border-radius:3px;}
+.pipeline-num{font-family:var(--mono);font-size:11px;color:var(--muted);width:20px;text-align:right;}
+.profile-mini{display:flex;align-items:center;gap:10px;padding:12px;background:var(--surface2);border-radius:var(--radius);}
+.profile-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--cyan));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#fff;flex-shrink:0;}
+.profile-name{font-weight:600;font-size:13px;}
+.profile-sub{color:var(--muted);font-size:11.5px;}
+
+/* ── Telegram connect widget ── */
+.tg-box{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;}
+.tg-status-connected{color:var(--green);font-size:12.5px;font-weight:500;}
+.tg-status-disconnected{color:var(--amber);font-size:12.5px;font-weight:500;}
+.step-label{font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:500;}
+
+/* ── Detail panel ── */
+.detail-section{margin-bottom:16px;}
+.detail-label{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;}
+.detail-raw{font-family:var(--mono);font-size:11.5px;line-height:1.7;color:var(--muted);white-space:pre-wrap;max-height:160px;overflow-y:auto;background:var(--surface2);padding:10px;border-radius:8px;}
+.log-row{font-family:var(--mono);font-size:11px;color:var(--muted);padding:3px 0;border-bottom:1px solid var(--border);}
+.log-ts{color:var(--accent2);margin-right:8px;}
+.cover-letter-text{font-size:12.5px;line-height:1.7;color:var(--text);background:var(--surface2);padding:12px;border-radius:8px;max-height:180px;overflow-y:auto;}
+
+/* ── Modals ── */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:480px;max-height:85vh;overflow-y:auto;}
+.modal h2{font-size:16px;font-weight:700;margin-bottom:20px;}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px;}
+.modal .btn{width:auto;}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 18px;font-size:13px;z-index:200;opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none;}
+.toast.show{opacity:1;transform:translateY(0);}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;color:var(--muted);text-align:center;}
+.empty .icon{font-size:36px;margin-bottom:12px;}
+::-webkit-scrollbar{width:5px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+.divider{height:1px;background:var(--border);margin:16px 0;}
+</style>
+</head>
+<body>
+
+<!-- ══ AUTH SCREEN ══════════════════════════════════════════════════════════ -->
+<div id="authScreen" class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-logo">Job<span>Hunt</span></div>
+    <div class="auth-sub">Telegram job aggregator + auto-apply</div>
+
+    <div class="auth-tabs">
+      <div class="auth-tab active" onclick="switchAuthTab('login',this)">Login</div>
+      <div class="auth-tab" onclick="switchAuthTab('register',this)">Register</div>
+    </div>
+
+    <!-- Login form -->
+    <div id="loginForm">
+      <div class="form-group"><label>Email</label><input id="loginEmail" type="email" placeholder="you@gmail.com" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <div class="form-group"><label>Password</label><input id="loginPass" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <button class="btn btn-primary" onclick="doLogin()">Login</button>
+      <div class="auth-err" id="loginErr"></div>
+    </div>
+
+    <!-- Register form -->
+    <div id="registerForm" style="display:none;">
+      <div class="form-group"><label>Full Name</label><input id="regName" placeholder="Ayush Tomar"></div>
+      <div class="form-group"><label>Email</label><input id="regEmail" type="email" placeholder="you@gmail.com"></div>
+      <div class="form-group"><label>Password (min 8 chars)</label><input id="regPass" type="password" placeholder="••••••••"></div>
+      <button class="btn btn-primary" onclick="doRegister()">Create Account</button>
+      <div class="auth-err" id="regErr"></div>
+      <div class="auth-ok" id="regOk"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MAIN APP ═════════════════════════════════════════════════════════════ -->
+<div id="appScreen" style="display:none;">
+<div class="layout">
+
+  <header class="topbar">
+    <div class="logo">Job<span>Hunt</span></div>
+    <div class="topbar-stats">
+      <div class="tstat"><strong id="stat-jobs">–</strong> jobs</div>
+      <div class="tstat"><strong id="stat-channels">–</strong> channels</div>
+      <div class="tstat"><strong id="stat-applied">–</strong> applied</div>
+      <div class="tstat"><strong id="stat-interviews">–</strong> interviews</div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-sm" onclick="triggerScrape()">⚡ Scrape</button>
+      <button class="btn btn-sm" onclick="triggerEnrich()">✨ Enrich</button>
+      <button class="btn btn-sm" onclick="openModal('profileModal')">👤 Profile</button>
+      <button class="btn btn-sm" onclick="openModal('channelModal')">+ Channel</button>
+      <div class="user-chip"><strong id="topUserName">–</strong> <span onclick="doLogout()" style="cursor:pointer;color:var(--red);">logout</span></div>
+    </div>
+  </header>
+
+  <aside class="sidebar">
+    <div class="nav-label">Feed</div>
+    <div class="nav-item active" onclick="setFilter('all',this)"><span>📋</span> All Jobs <span class="nav-badge" id="nb-all">0</span></div>
+    <div class="nav-item" onclick="setFilter('saved',this)"><span>🔖</span> Saved</div>
+    <div class="nav-item" onclick="setFilter('new',this)"><span>🆕</span> New</div>
+    <div class="nav-label">Pipeline</div>
+    <div class="nav-item" onclick="setFilter('confirmed',this)"><span>✅</span> Confirmed</div>
+    <div class="nav-item" onclick="setFilter('applied',this)"><span>📤</span> Applied</div>
+    <div class="nav-item" onclick="setFilter('interview',this)"><span>🗣️</span> Interview</div>
+    <div class="nav-item" onclick="setFilter('rejected',this)"><span>❌</span> Rejected</div>
+    <div class="nav-label">Sources</div>
+    <div id="sidebarChannels"></div>
+    <div class="nav-label" style="margin-top:20px;">Account</div>
+    <div class="nav-item" onclick="openModal('telegramModal')"><span>📡</span> Telegram Setup</div>
+    <div class="nav-item" onclick="openModal('profileModal')"><span>👤</span> My Profile</div>
+  </aside>
+
+  <main class="main">
+    <div class="tabs">
+      <div class="tab active" onclick="setSource('',this)">All</div>
+      <div class="tab" onclick="setSource('public',this)">Public</div>
+      <div class="tab" onclick="setSource('private',this)">Private</div>
+    </div>
+    <div class="filter-bar">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input id="searchInput" placeholder="Search jobs, skills, companies…" oninput="debounceSearch()">
+      </div>
+      <select class="select" id="minScore" onchange="loadJobs()">
+        <option value="0">Any match</option>
+        <option value="60">60%+ match</option>
+        <option value="75">75%+ match</option>
+      </select>
+    </div>
+    <div class="jobs-grid" id="jobsGrid">
+      <div class="empty"><div class="icon">📡</div><p>Connect Telegram and add channels to see jobs</p></div>
+    </div>
+  </main>
+
+  <aside class="panel" id="rightPanel">
+    <div id="defaultPanel">
+      <div class="panel-section">
+        <div class="panel-title">Pipeline</div>
+        <div id="pipelineRows"></div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-title">Sources</div>
+        <div id="panelChannels"></div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-title">Profile</div>
+        <div class="profile-mini">
+          <div class="profile-avatar" id="profileAvatar">?</div>
+          <div>
+            <div class="profile-name" id="profileName">Not set up</div>
+            <div class="profile-sub" id="profileSub">Click Profile to add details</div>
+          </div>
+        </div>
+      </div>
+      <div class="panel-section">
+        <div class="panel-title">Telegram</div>
+        <div id="tgStatusPanel"></div>
+      </div>
+    </div>
+
+    <div id="jobDetailPanel" style="display:none;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+        <button class="btn btn-sm" onclick="closeDetail()">← Back</button>
+        <span style="color:var(--muted);font-size:12px;" id="detailChannel"></span>
+      </div>
+      <div class="detail-section">
+        <div style="font-weight:700;font-size:15px;margin-bottom:4px;" id="detailTitle">–</div>
+        <div style="color:var(--muted);font-size:12.5px;" id="detailCompany">–</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;" id="detailPills"></div>
+      <div class="detail-section">
+        <div class="detail-label">Raw Post</div>
+        <div class="detail-raw" id="detailRaw"></div>
+      </div>
+      <div class="detail-section" id="detailCoverSection" style="display:none;">
+        <div class="detail-label">Cover Letter (AI)</div>
+        <div class="cover-letter-text" id="detailCover"></div>
+      </div>
+      <div class="detail-section" id="detailLogSection" style="display:none;">
+        <div class="detail-label">Apply Log</div>
+        <div id="detailLog"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;" id="detailActions"></div>
+    </div>
+  </aside>
+
+</div>
+</div>
+
+<!-- ══ MODALS ═══════════════════════════════════════════════════════════════ -->
+
+<!-- Telegram Setup Modal -->
+<div class="modal-overlay" id="telegramModal">
+  <div class="modal" style="width:440px;">
+    <h2>📡 Connect Telegram</h2>
+    <div id="tgStep1">
+      <p style="color:var(--muted);font-size:13px;margin-bottom:16px;">Get your API credentials from <a href="https://my.telegram.org" target="_blank" style="color:var(--accent2);">my.telegram.org</a> → API development tools</p>
+      <div class="form-group"><label>API ID</label><input id="tgApiId" placeholder="12345678"></div>
+      <div class="form-group"><label>API Hash</label><input id="tgApiHash" placeholder="abc123..."></div>
+      <div class="form-group"><label>Phone Number</label><input id="tgPhone" placeholder="+91XXXXXXXXXX"></div>
+      <div class="auth-err" id="tgErr1"></div>
+      <div style="display:flex;gap:8px;margin-top:16px;">
+        <button class="btn" onclick="closeModal('telegramModal')" style="width:auto;">Cancel</button>
+        <button class="btn btn-primary" onclick="sendTgOTP()" style="flex:1;">Send OTP →</button>
+      </div>
+    </div>
+    <div id="tgStep2" style="display:none;">
+      <p style="color:var(--muted);font-size:13px;margin-bottom:16px;">Enter the 5-digit code sent to your Telegram app</p>
+      <div class="form-group"><label>OTP Code</label><input id="tgOTP" placeholder="12345" maxlength="5" style="font-size:20px;letter-spacing:6px;text-align:center;"></div>
+      <div class="auth-err" id="tgErr2"></div>
+      <div class="auth-ok" id="tgOk2"></div>
+      <div style="display:flex;gap:8px;margin-top:16px;">
+        <button class="btn" onclick="document.getElementById('tgStep1').style.display='';document.getElementById('tgStep2').style.display='none';" style="width:auto;">← Back</button>
+        <button class="btn btn-primary" onclick="verifyTgOTP()" style="flex:1;">Verify & Connect ✅</button>
+      </div>
+    </div>
+    <div id="tgConnected" style="display:none;">
+      <div style="text-align:center;padding:20px 0;">
+        <div style="font-size:36px;margin-bottom:12px;">✅</div>
+        <div style="font-weight:600;font-size:15px;margin-bottom:6px;">Telegram Connected!</div>
+        <div style="color:var(--muted);font-size:13px;margin-bottom:20px;" id="tgConnectedAs"></div>
+        <button class="btn btn-danger btn-sm" onclick="disconnectTelegram()">Disconnect</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Profile Modal -->
+<div class="modal-overlay" id="profileModal">
+  <div class="modal">
+    <h2>👤 Your Profile</h2>
+    <div class="form-row">
+      <div class="form-group"><label>Phone</label><input id="pPhone" placeholder="+91 9XXXXXXXXX"></div>
+      <div class="form-group"><label>Years Experience</label><input id="pYears" type="number" step="0.5" placeholder="0"></div>
+    </div>
+    <div class="form-group"><label>Skills (comma-separated)</label><input id="pSkills" placeholder="Python, FastAPI, React, Docker…"></div>
+    <div class="form-row">
+      <div class="form-group"><label>LinkedIn URL</label><input id="pLinkedin" placeholder="https://linkedin.com/in/…"></div>
+      <div class="form-group"><label>GitHub URL</label><input id="pGithub" placeholder="https://github.com/…"></div>
+    </div>
+    <div class="form-group"><label>Portfolio URL</label><input id="pPortfolio"></div>
+    <div class="form-group"><label>Summary</label><textarea id="pSummary" rows="3" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;outline:none;resize:vertical;font-family:var(--font);" placeholder="Final-year IT student building AI apps…"></textarea></div>
+    <div class="form-group"><label>Resume PDF</label><input type="file" id="pResume" accept=".pdf" style="background:transparent;border:none;padding:0;"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('profileModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveProfile()">Save Profile</button>
+    </div>
+  </div>
+</div>
+
+<!-- Channel Modal -->
+<div class="modal-overlay" id="channelModal">
+  <div class="modal" style="width:380px;">
+    <h2>+ Add Channel</h2>
+    <div class="form-group"><label>Channel Username or ID</label><input id="chUsername" placeholder="@fresheroffcampus  or  -1001234567890"></div>
+    <div class="form-group"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;"><input type="checkbox" id="chPrivate" style="width:auto;"> Private channel</label></div>
+    <div style="margin-top:16px;">
+      <div class="panel-title" style="margin-bottom:10px;">Your Channels</div>
+      <div id="channelList" style="max-height:200px;overflow-y:auto;"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeModal('channelModal')">Close</button>
+      <button class="btn btn-primary" onclick="addChannel()">Add Channel</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '';
+let currentFilter = 'all';
+let currentSource = '';
+let currentJobId  = null;
+let searchTimer   = null;
+let pendingPhoneCodeHash = null;
+
+// ── Boot ──────────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const me = await get('/api/auth/me');
+    showApp(me);
+  } catch {
+    showAuth();
+  }
+});
+
+function showAuth() {
+  document.getElementById('authScreen').style.display = 'flex';
+  document.getElementById('appScreen').style.display  = 'none';
+}
+function showApp(me) {
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display  = 'block';
+  document.getElementById('topUserName').textContent   = me.full_name || me.email;
+  document.getElementById('profileName').textContent   = me.full_name || me.email;
+  document.getElementById('profileAvatar').textContent = (me.full_name || me.email).charAt(0).toUpperCase();
+  updateTgStatus(me.tg_connected);
+  loadStats(); loadJobs(); loadChannels(); loadProfile();
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────
+function switchAuthTab(tab, el) {
+  document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('loginForm').style.display    = tab === 'login' ? '' : 'none';
+  document.getElementById('registerForm').style.display = tab === 'register' ? '' : 'none';
+}
+
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPass').value;
+  document.getElementById('loginErr').textContent = '';
+  try {
+    const r = await fetch('/api/auth/login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      credentials:'include', body: JSON.stringify({email, password: pass})
+    });
+    const d = await r.json();
+    if (!r.ok) { document.getElementById('loginErr').textContent = d.detail; return; }
+    showApp(d.user);
+  } catch(e) {
+    document.getElementById('loginErr').textContent = 'Connection error';
+  }
+}
+
+async function doRegister() {
+  const name  = document.getElementById('regName').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  const pass  = document.getElementById('regPass').value;
+  document.getElementById('regErr').textContent = '';
+  document.getElementById('regOk').textContent  = '';
+  try {
+    const r = await fetch('/api/auth/register', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({full_name: name, email, password: pass})
+    });
+    const d = await r.json();
+    if (!r.ok) { document.getElementById('regErr').textContent = d.detail; return; }
+    document.getElementById('regOk').textContent = '✅ Account created! Please login.';
+    setTimeout(() => switchAuthTab('login', document.querySelectorAll('.auth-tab')[0]), 1500);
+  } catch(e) {
+    document.getElementById('regErr').textContent = 'Connection error';
+  }
+}
+
+async function doLogout() {
+  await fetch('/api/auth/logout', {method:'POST', credentials:'include'});
+  showAuth();
+}
+
+// ── Telegram connect ──────────────────────────────────────────────────
+function updateTgStatus(connected) {
+  const panel = document.getElementById('tgStatusPanel');
+  if (connected) {
+    panel.innerHTML = `<div class="tg-status-connected">● Connected</div><button class="btn btn-sm" style="margin-top:8px;" onclick="openModal('telegramModal')">Manage</button>`;
+    showTgConnected();
+  } else {
+    panel.innerHTML = `<div class="tg-status-disconnected">● Not connected</div><button class="btn btn-sm btn-primary" style="margin-top:8px;" onclick="openModal('telegramModal')">Connect Now</button>`;
+  }
+}
+
+function showTgConnected() {
+  document.getElementById('tgStep1').style.display     = 'none';
+  document.getElementById('tgStep2').style.display     = 'none';
+  document.getElementById('tgConnected').style.display = '';
+}
+
+async function sendTgOTP() {
+  const api_id   = document.getElementById('tgApiId').value.trim();
+  const api_hash = document.getElementById('tgApiHash').value.trim();
+  const phone    = document.getElementById('tgPhone').value.trim();
+  document.getElementById('tgErr1').textContent = '';
+  if (!api_id || !api_hash || !phone) {
+    document.getElementById('tgErr1').textContent = 'Fill all fields'; return;
+  }
+  try {
+    const r = await authPost('/api/telegram/setup', {api_id, api_hash, phone});
+    const d = await r.json();
+    if (!r.ok) { document.getElementById('tgErr1').textContent = d.detail; return; }
+    pendingPhoneCodeHash = d.phone_code_hash;
+    document.getElementById('tgStep1').style.display = 'none';
+    document.getElementById('tgStep2').style.display = '';
+  } catch(e) {
+    document.getElementById('tgErr1').textContent = 'Error: ' + e.message;
+  }
+}
+
+async function verifyTgOTP() {
+  const code = document.getElementById('tgOTP').value.trim();
+  document.getElementById('tgErr2').textContent = '';
+  document.getElementById('tgOk2').textContent  = '';
+  if (!code || !pendingPhoneCodeHash) { document.getElementById('tgErr2').textContent = 'Enter the code'; return; }
+  try {
+    const r = await authPost('/api/telegram/verify', {code, phone_code_hash: pendingPhoneCodeHash});
+    const d = await r.json();
+    if (!r.ok) { document.getElementById('tgErr2').textContent = d.detail; return; }
+    document.getElementById('tgOk2').textContent = '✅ Connected!';
+    document.getElementById('tgConnectedAs').textContent = 'Logged in as ' + (d.telegram_username || 'your account');
+    updateTgStatus(true);
+    setTimeout(() => { showTgConnected(); }, 800);
+    toast('Telegram connected ✅');
+  } catch(e) {
+    document.getElementById('tgErr2').textContent = 'Error: ' + e.message;
+  }
+}
+
+async function disconnectTelegram() {
+  if (!confirm('This will remove your Telegram session. Continue?')) return;
+  await authDel('/api/telegram/disconnect');
+  updateTgStatus(false);
+  document.getElementById('tgStep1').style.display     = '';
+  document.getElementById('tgStep2').style.display     = 'none';
+  document.getElementById('tgConnected').style.display = 'none';
+  toast('Telegram disconnected');
+}
+
+// ── Stats ─────────────────────────────────────────────────────────────
+async function loadStats() {
+  try {
+    const s = await authGet('/api/stats');
+    document.getElementById('stat-jobs').textContent       = s.total_jobs;
+    document.getElementById('stat-channels').textContent   = s.total_channels;
+    document.getElementById('stat-applied').textContent    = s.applied;
+    document.getElementById('stat-interviews').textContent = s.interviews;
+    document.getElementById('nb-all').textContent          = s.total_jobs;
+    const max = Math.max(s.total_jobs, 1);
+    document.getElementById('pipelineRows').innerHTML = [
+      {label:'Confirmed',count:s.confirmed,color:'#6c63ff'},
+      {label:'Applied',count:s.applied,color:'#22c55e'},
+      {label:'Interview',count:s.interviews,color:'#06b6d4'},
+    ].map(st=>`<div class="pipeline-row"><div class="pipeline-label">${st.label}</div><div class="pipeline-bar"><div class="pipeline-fill" style="width:${(st.count/max*100).toFixed(0)}%;background:${st.color}"></div></div><div class="pipeline-num">${st.count}</div></div>`).join('');
+  } catch(e) {}
+}
+
+// ── Jobs ──────────────────────────────────────────────────────────────
+async function loadJobs() {
+  const search   = document.getElementById('searchInput').value;
+  const minScore = document.getElementById('minScore').value;
+  const status   = currentFilter === 'all' ? '' : currentFilter;
+  const params   = new URLSearchParams({limit:60,offset:0,min_score:minScore});
+  if (status)        params.set('status', status);
+  if (currentSource) params.set('source', currentSource);
+  if (search)        params.set('search', search);
+  try {
+    const jobs = await authGet(`/api/jobs?${params}`);
+    renderJobs(jobs);
+  } catch(e) {}
+}
+
+function renderJobs(jobs) {
+  const grid = document.getElementById('jobsGrid');
+  if (!jobs.length) {
+    grid.innerHTML = `<div class="empty"><div class="icon">🔍</div><p>No jobs found. Try scraping or adjusting filters.</p></div>`;
+    return;
+  }
+  grid.innerHTML = jobs.map((j,i)=>jobCard(j, i===0 && j.match_score>=80)).join('');
+}
+
+function jobCard(j, isTop) {
+  const initials = (j.company||j.title||'J').slice(0,2).toUpperCase();
+  const score    = j.match_score||0;
+  const sc       = score>=75?'#22c55e':score>=50?'#f59e0b':'#6b7280';
+  const skillPills = (j.skills||[]).slice(0,4).map(s=>`<span class="pill pill-skill">${s}</span>`).join('');
+  return `<div class="job-card ${isTop?'top-match':''} ${j.id===currentJobId?'selected':''}" onclick="selectJob(${j.id})">
+    ${isTop?'<div class="top-match-ribbon">⭐ Top Match</div>':''}
+    <div class="card-header">
+      <div class="company-avatar">${initials}</div>
+      <div class="card-title-wrap"><div class="card-title">${j.title||'Job Opening'}</div><div class="card-company">${j.company||j.channel}</div></div>
+      ${j.salary?`<div class="card-salary">${j.salary}</div>`:''}
+    </div>
+    <div class="card-meta">
+      <span class="pill ${j.is_private?'pill-priv':'pill-pub'}">${j.is_private?'🔒 Private':'📢 Public'}</span>
+      ${j.is_remote?'<span class="pill pill-remote">🌐 Remote</span>':''}
+      ${j.location&&!j.is_remote?`<span class="pill pill-loc">📍 ${j.location}</span>`:''}
+      <span class="status-badge s-${j.status}">${j.status}</span>
+    </div>
+    ${skillPills?`<div class="card-skills">${skillPills}</div>`:''}
+    <div class="card-footer">
+      <div class="score-bar-wrap"><div class="score-bar"><div class="score-fill" style="width:${score}%;background:${sc}"></div></div><div class="score-label">${score.toFixed(0)}% match</div></div>
+      <div class="card-actions">
+        ${j.status==='new'?`<button class="btn btn-sm" onclick="event.stopPropagation();updateStatus(${j.id},'saved')">🔖</button>`:''}
+        ${j.status==='saved'?`<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();confirmApply(${j.id})">⚡ Apply</button>`:''}
+      </div>
+      <div class="card-time" style="margin-left:10px;">${relTime(j.posted_at)}</div>
+    </div>
+  </div>`;
+}
+
+async function selectJob(id) {
+  currentJobId = id;
+  const j = await authGet(`/api/jobs/${id}`);
+  showDetail(j);
+  document.querySelectorAll('.job-card').forEach(c=>c.classList.remove('selected'));
+}
+
+function showDetail(j) {
+  document.getElementById('defaultPanel').style.display    = 'none';
+  document.getElementById('jobDetailPanel').style.display  = 'block';
+  document.getElementById('detailChannel').textContent     = j.is_private?'🔒 Private':'📢 '+j.channel;
+  document.getElementById('detailTitle').textContent       = j.title||'Job Opening';
+  document.getElementById('detailCompany').textContent     = [j.company,j.location].filter(Boolean).join(' · ')||'–';
+  document.getElementById('detailRaw').textContent         = j.raw_text||'–';
+  const pills = [];
+  if(j.salary)   pills.push(`<span class="pill" style="background:rgba(34,197,94,.12);color:#22c55e">💰 ${j.salary}</span>`);
+  if(j.is_remote)pills.push(`<span class="pill pill-remote">🌐 Remote</span>`);
+  (j.skills||[]).slice(0,6).forEach(s=>pills.push(`<span class="pill pill-skill">${s}</span>`));
+  document.getElementById('detailPills').innerHTML = pills.join('');
+  if(j.application?.cover_letter){document.getElementById('detailCoverSection').style.display='';document.getElementById('detailCover').textContent=j.application.cover_letter;}
+  else document.getElementById('detailCoverSection').style.display='none';
+  if(j.application?.log?.length){document.getElementById('detailLogSection').style.display='';document.getElementById('detailLog').innerHTML=j.application.log.map(l=>`<div class="log-row"><span class="log-ts">${l.ts?.slice(11,19)}</span>${l.msg}</div>`).join('');}
+  else document.getElementById('detailLogSection').style.display='none';
+  const acts=[];
+  if(j.status==='new')       acts.push(`<button class="btn" onclick="updateStatus(${j.id},'saved')">🔖 Save Job</button>`);
+  if(j.status==='saved')     acts.push(`<button class="btn btn-primary" onclick="confirmApply(${j.id})">⚡ Confirm & Auto-Apply</button>`);
+  if(j.status==='confirmed') acts.push(`<button class="btn btn-primary" onclick="confirmApply(${j.id})">🔄 Retry Apply</button>`);
+  if(j.status==='applied')   acts.push(`<button class="btn" onclick="updateStatus(${j.id},'interview')">🗣️ Got Interview</button>`,`<button class="btn btn-danger" onclick="updateStatus(${j.id},'rejected')">❌ Rejected</button>`);
+  if(j.apply_url)  acts.push(`<a href="${j.apply_url}" target="_blank" class="btn">🔗 Open Apply Link</a>`);
+  if(j.apply_email)acts.push(`<a href="mailto:${j.apply_email}" class="btn">✉️ ${j.apply_email}</a>`);
+  document.getElementById('detailActions').innerHTML = acts.join('');
+}
+
+function closeDetail() { currentJobId=null;document.getElementById('defaultPanel').style.display='';document.getElementById('jobDetailPanel').style.display='none';loadStats(); }
+
+async function updateStatus(id,status){await authPatch(`/api/jobs/${id}/status`,{status});toast(`→ ${status}`);await loadJobs();if(currentJobId===id){const j=await authGet(`/api/jobs/${id}`);showDetail(j);}}
+async function confirmApply(id){await authPost(`/api/jobs/${id}/confirm`);toast('⚡ Applying in background…');await loadJobs();setTimeout(async()=>{if(currentJobId===id){const j=await authGet(`/api/jobs/${id}`);showDetail(j);}},4000);}
+
+function setFilter(f,el){currentFilter=f;document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));el.classList.add('active');loadJobs();}
+function setSource(s,el){currentSource=s;document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');loadJobs();}
+function debounceSearch(){clearTimeout(searchTimer);searchTimer=setTimeout(loadJobs,400);}
+
+// ── Channels ──────────────────────────────────────────────────────────
+async function loadChannels() {
+  try {
+    const channels = await authGet('/api/channels');
+    document.getElementById('sidebarChannels').innerHTML = channels.slice(0,6).map(ch=>`<div class="nav-item" onclick="filterByChannel('${ch.username}')"><span>${ch.is_private?'🔒':'📢'}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${ch.title||ch.username}</span><span class="nav-badge">${ch.job_count}</span></div>`).join('');
+    document.getElementById('panelChannels').innerHTML   = channels.map(ch=>`<div class="source-row"><div class="source-dot" style="background:${ch.is_private?'var(--accent2)':'var(--green)'}"></div><div class="source-name">${ch.title||ch.username}</div><div class="source-count">${ch.job_count}</div></div>`).join('') || '<p style="color:var(--muted);font-size:12px;">No channels yet</p>';
+    const listEl = document.getElementById('channelList');
+    if(listEl) listEl.innerHTML = channels.map(ch=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);"><span style="flex:1;font-size:12px;">${ch.title||ch.username} ${ch.is_private?'🔒':''}</span><button class="btn btn-sm btn-danger" onclick="deleteChannel(${ch.id})">Remove</button></div>`).join('') || '<p style="color:var(--muted);font-size:12px;">No channels</p>';
+  } catch(e) {}
+}
+
+function filterByChannel(u){document.getElementById('searchInput').value=u;loadJobs();}
+async function addChannel(){const u=document.getElementById('chUsername').value.trim();const p=document.getElementById('chPrivate').checked;if(!u)return;await authPost('/api/channels',{username:u,is_private:p});document.getElementById('chUsername').value='';await loadChannels();toast('Channel added');}
+async function deleteChannel(id){await authDel(`/api/channels/${id}`);await loadChannels();toast('Channel removed');}
+
+// ── Profile ───────────────────────────────────────────────────────────
+async function loadProfile() {
+  try {
+    const p = await authGet('/api/profile');
+    document.getElementById('profileSub').textContent = `${p.years_exp||0} yrs · ${(p.skills||[]).slice(0,3).join(', ')}`;
+    document.getElementById('pPhone').value     = p.phone||'';
+    document.getElementById('pYears').value     = p.years_exp||'';
+    document.getElementById('pSkills').value    = (p.skills||[]).join(', ');
+    document.getElementById('pLinkedin').value  = p.linkedin||'';
+    document.getElementById('pGithub').value    = p.github||'';
+    document.getElementById('pPortfolio').value = p.portfolio||'';
+    document.getElementById('pSummary').value   = p.summary||'';
+  } catch(e) {}
+}
+
+async function saveProfile(){
+  const body={phone:document.getElementById('pPhone').value,years_exp:parseFloat(document.getElementById('pYears').value)||0,skills:document.getElementById('pSkills').value.split(',').map(s=>s.trim()).filter(Boolean),linkedin:document.getElementById('pLinkedin').value,github:document.getElementById('pGithub').value,portfolio:document.getElementById('pPortfolio').value,summary:document.getElementById('pSummary').value};
+  await authPut('/api/profile',body);
+  const file=document.getElementById('pResume').files[0];
+  if(file){const fd=new FormData();fd.append('file',file);await fetch('/api/profile/resume',{method:'POST',credentials:'include',body:fd});}
+  closeModal('profileModal');await loadProfile();toast('Profile saved ✅');
+}
+
+// ── Scrape/Enrich ─────────────────────────────────────────────────────
+async function triggerScrape(){try{await authPost('/api/scrape/trigger');toast('⚡ Scraping…');}catch(e){toast('Connect Telegram first');}}
+async function triggerEnrich(){await authPost('/api/enrich/trigger');toast('✨ Enriching…');setTimeout(loadJobs,5000);}
+
+// ── Modals ────────────────────────────────────────────────────────────
+function openModal(id){document.getElementById(id).classList.add('open');if(id==='channelModal')loadChannels();if(id==='telegramModal'){/* check status */authGet('/api/auth/me').then(me=>{if(me.tg_connected)showTgConnected();else{document.getElementById('tgStep1').style.display='';document.getElementById('tgConnected').style.display='none';}}).catch(()=>{});}}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');}));
+
+// ── Toast ─────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),3000);}
+
+// ── Utils ─────────────────────────────────────────────────────────────
+function relTime(iso){if(!iso)return'–';const d=Date.now()-new Date(iso);if(d<60000)return'just now';if(d<3600000)return`${Math.floor(d/60000)}m ago`;if(d<86400000)return`${Math.floor(d/3600000)}h ago`;return`${Math.floor(d/86400000)}d ago`;}
+
+// Authenticated fetch helpers
+const creds = {credentials:'include'};
+async function authGet(url){const r=await fetch(API+url,creds);if(r.status===401){showAuth();throw new Error('Unauth');}return r.json();}
+async function authPost(url,b){const r=await fetch(API+url,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:b?JSON.stringify(b):null});if(r.status===401){showAuth();throw new Error('Unauth');}return r;}
+async function authPut(url,b){return fetch(API+url,{method:'PUT',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(b)});}
+async function authPatch(url,b){return fetch(API+url,{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(b)});}
+async function authDel(url){return fetch(API+url,{method:'DELETE',credentials:'include'});}
+</script>
+</body>
+</html>

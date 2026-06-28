@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: jobhunt
+    runtime: python
+    buildCommand: pip install -r requirements.txt && playwright install chromium
+    startCommand: python run.py
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FERNET_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: jobhunt-db
+          property: connectionString
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: EMAIL_FROM_NAME
+        sync: false
+      - key: SCRAPE_INTERVAL_MINUTES
+        value: "15"
+      - key: MAX_JOBS_PER_POLL
+        value: "50"
+
+databases:
+  - name: jobhunt-db
+    databaseName: jobhunt
+    user: jobhunt
+    plan: free
