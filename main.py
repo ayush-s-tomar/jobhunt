@@ -103,10 +103,10 @@ async def login(request: Request, body: LoginBody, response: Response, db: Async
     response.set_cookie(
         key      = "access_token",
         value    = token,
-        httponly = True,       # JS cannot read this
-        secure   = False,      # Set True when using HTTPS in production
-        samesite = "lax",
-        max_age  = 86400,      # 24 hours
+        httponly = True,
+        secure   = True,
+        samesite = "none",
+        max_age  = 2592000,
     )
     return {"ok": True, "user": {"id": user.id, "email": user.email, "full_name": user.full_name}}
 
