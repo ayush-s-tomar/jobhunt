@@ -45,7 +45,9 @@ Bot sends email or fills form → Status: Applied ✅
 
 **439 jobs scraped from 5 channels in under 60 seconds.**
 
-Jobs are ranked by AI match score — highest matches float to top. Each card shows salary, location, company, and a one-click apply button.
+![JobHunt Dashboard](assets/demo.png)
+
+Jobs are ranked by AI match score — highest matches float to top. Each card shows salary, location, company, and a one-click apply button. Real companies like Zoom, Kone, GreyOrange, and Zebra pulled directly from Telegram.
 
 ---
 
