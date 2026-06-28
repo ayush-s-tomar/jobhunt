@@ -1,198 +1,186 @@
-# JobHunt — Telegram Job Aggregator + Auto-Apply Bot
+# JobHunt — Telegram Job Aggregator + Auto-Apply
 
-> Watches your Telegram job channels (public & private), scores every post against your profile using Claude AI, and auto-applies with one click.
+> Watches Telegram job channels, scores every post against your profile using Groq AI, and auto-applies with one click.
 
----
-
-## 🗂 Project Structure
-
-```
-jobhunt/
-├── backend/
-│   ├── database.py       ← SQLAlchemy models + DB init
-│   ├── ai_scorer.py      ← Claude AI: parse + score + cover letter
-│   └── apply_bot.py      ← Email sender + Playwright form-filler
-├── scraper/
-│   └── telegram_scraper.py  ← Polls Telegram channels
-├── frontend/
-│   └── index.html        ← Full dashboard UI
-├── data/                 ← Auto-created: SQLite DB + session file
-├── main.py               ← FastAPI routes
-├── run.py                ← Launch everything
-├── requirements.txt
-└── .env.example
-```
+[🔗 Live Demo](https://jobhunt-lonp.onrender.com) &nbsp;|&nbsp; [👤 LinkedIn](https://www.linkedin.com/in/ayush-s-tomar/)
 
 ---
 
-## ⚡ Setup — Step by Step
+## The Problem
 
-### Step 1: Clone and create virtual environment
+Indian job seekers manually check 10+ Telegram job channels every day, copy-paste apply links, and repeat the same cover letter with minor tweaks. Hours wasted. Opportunities missed.
 
-```bash
-cd jobhunt
-py -3.11 -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### Step 2: Install Playwright browsers (one-time)
-
-```bash
-playwright install chromium
-```
-
-### Step 3: Create your .env file
-
-```bash
-copy .env.example .env
-```
-
-Open `.env` and fill in:
-
-| Variable | Where to get it | Required |
-|---|---|---|
-| `TELEGRAM_API_ID` | [my.telegram.org](https://my.telegram.org) → API development tools | ✅ |
-| `TELEGRAM_API_HASH` | Same page | ✅ |
-| `TELEGRAM_PHONE` | Your phone number with country code | ✅ |
-| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) | ✅ |
-| `SMTP_USER` | Your Gmail address | For email apply |
-| `SMTP_PASS` | Gmail **App Password** (not your main password) | For email apply |
-| `PUBLIC_CHANNELS` | @channelname, comma-separated | ✅ |
-| `PRIVATE_CHANNELS` | Numeric channel IDs, comma-separated | Optional |
-
-**To get a Gmail App Password:** Gmail → Settings → Security → 2-Step Verification → App Passwords → Create one for "Mail".
-
-**To get a private channel ID:**
-1. Forward a message from the private channel to [@username_to_id_bot](https://t.me/username_to_id_bot)
-2. It'll give you the numeric ID (starts with -100...)
-
-### Step 4: Authenticate with Telegram (one-time)
-
-```bash
-python scraper/telegram_scraper.py --auth
-```
-
-Enter your phone number and the OTP Telegram sends you. A `data/session.session` file is created — keep it safe, don't share it.
-
-### Step 5: Test scraper manually
-
-```bash
-python scraper/telegram_scraper.py --once
-```
-
-You'll see logs like:
-```
-@jobsfordevs: +12 new jobs
-@IndiaJobsHiring: +8 new jobs
-✅ Poll complete — 20 new jobs total
-```
-
-### Step 6: Start the server
-
-```bash
-python run.py
-```
-
-Open: **http://localhost:8000**
+**JobHunt automates the entire pipeline — from Telegram post to submitted application.**
 
 ---
 
-## 👤 First Time: Set Up Your Profile
+## What It Does
 
-1. Click **Profile** (top right)
-2. Fill in your name, email, phone, skills, years experience
-3. Upload your **resume PDF**
-4. Click **Save Profile**
+Connect your Telegram account. Add job channels. JobHunt scrapes every post, scores it against your profile using AI, and lets you apply in one click.
 
-This gets used for every application automatically.
-
----
-
-## 🔄 Full Auto-Apply Flow
+| Step | What happens |
+|------|-------------|
+| 📡 **Scrape** | Polls your Telegram channels every 15 minutes via MTProto |
+| 🤖 **Enrich** | Groq AI extracts title, company, salary, skills, apply link |
+| 🎯 **Score** | Matches job requirements against your skills and experience (0–100%) |
+| ✉️ **Apply** | Sends tailored email + resume, or fills forms via Playwright |
 
 ```
 Telegram channel posts job
          ↓
 Scraper picks it up every 15 min
          ↓
-AI (Claude) enriches: title, company, skills, match score, apply path
+AI enriches: title, company, salary, match score
          ↓
-Job appears in dashboard with match % score
+Job appears in dashboard with match %
          ↓
-You click "Save Job" → then "Confirm & Auto-Apply"   ← only human step
+You click "Confirm & Auto-Apply"   ← only human step
          ↓
-Bot detects apply type:
-  • Email post? → Sends email + resume via SMTP
-  • URL post?   → Playwright fills the form, uploads resume, submits
-         ↓
-Status → Applied ✅  (or CAPTCHA flag if blocked)
+Bot sends email or fills form → Status: Applied ✅
 ```
 
 ---
 
-## 🚧 CAPTCHA Edge Cases
+## Demo
 
-~1 in 10 job board forms has CAPTCHA. When this happens:
-- The bot flags the job with 🚧
-- Job stays as "Confirmed" — not wasted
-- An "apply manually" link appears in the detail panel
-- You open the link and apply yourself (30 seconds)
+**439 jobs scraped from 5 channels in under 60 seconds.**
+
+Jobs are ranked by AI match score — highest matches float to top. Each card shows salary, location, company, and a one-click apply button.
 
 ---
 
-## 📡 Adding Channels
+## Tech Stack
 
-**Public channels** (easiest):
-- Click **+ Channel**
-- Enter `@channelname`
-- Click Add
-
-Good Indian software job channels to start with:
-```
-@jobsfordevs
-@IndiaJobsHiring
-@techjobsindia
-@startupjobsindia
-@DevHiringIndia
-```
-
-**Private channels:**
-- Find the numeric ID (see Step 3 above)
-- Enter it as `-1001234567890` with the Private checkbox checked
-- You must already be a member of the channel
+| Layer | Technology |
+|-------|-----------|
+| Backend | FastAPI + SQLAlchemy |
+| Database | PostgreSQL (production) / SQLite (local) |
+| Telegram | Telethon (MTProto) — per-user sessions stored encrypted in DB |
+| AI | Groq API (`llama-3.3-70b-versatile`) |
+| Form automation | Playwright (Chromium) |
+| Auth | JWT (HttpOnly cookies) + bcrypt passwords + Fernet encryption |
+| Deploy | Render (Web Service + PostgreSQL) |
+| Frontend | Vanilla JS + CSS (single HTML file, no build step) |
 
 ---
 
-## 🔁 Scraper Schedule
+## Security
 
-By default scrapes every **15 minutes**. Change in `.env`:
-```
-SCRAPE_INTERVAL_MINUTES=10
-```
-
-The scraper is gentle — it reads, never writes to Telegram. Polling every 10-15 min is safe.
-
----
-
-## 🚀 Deployment (Render)
-
-1. Push this repo to GitHub
-2. Create a Render **Web Service** pointing to `main.py`
-   - Build: `pip install -r requirements.txt && playwright install chromium`
-   - Start: `python run.py`
-3. Add all `.env` variables in Render's Environment tab
-4. Upload your `data/session.session` file via Render's persistent disk
+- Passwords → bcrypt hashed (never stored plain)
+- Telegram API keys → Fernet encrypted before hitting DB
+- Telegram sessions → StringSession stored encrypted in DB (survives redeploys)
+- JWT tokens → HttpOnly cookies (XSS-proof), 30-day expiry
+- All routes → user_id scoped (no cross-user data leaks)
+- Rate limiting → 5 login attempts/min, 3 registrations/hour per IP
 
 ---
 
-## 🔧 Troubleshooting
+## Project Structure
+
+```
+jobhunt/
+├── backend/
+│   ├── database.py          # SQLAlchemy models (User, Job, Channel, Application)
+│   ├── auth.py              # JWT, bcrypt, Fernet encryption
+│   ├── ai_scorer.py         # Groq: parse + score + cover letter
+│   ├── telegram_auth.py     # Per-user Telegram OTP flow + session management
+│   └── apply_bot.py         # Email sender + Playwright form-filler
+├── scraper/
+│   └── telegram_scraper.py  # MTProto scraper, per-user StringSession
+├── frontend/
+│   └── index.html           # Full dashboard UI
+├── main.py                  # All FastAPI routes
+├── run.py                   # Starts server + scraper scheduler
+├── render.yaml              # Render deployment config
+└── .env.example
+```
+
+---
+
+## Run Locally
+
+```bash
+# 1. Clone
+git clone https://github.com/ayush-s-tomar/jobhunt.git
+cd jobhunt
+
+# 2. Create virtual environment
+py -3.11 -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+playwright install chromium
+
+# 3. Generate secret keys
+python -c "import secrets; print(secrets.token_hex(32))"          # → SECRET_KEY
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"  # → FERNET_KEY
+
+# 4. Set up .env
+copy .env.example .env
+# Fill in SECRET_KEY, FERNET_KEY, GROQ_API_KEY
+
+# 5. Start
+python run.py
+# → http://localhost:8000
+```
+
+**Free API keys needed:**
+- Groq → https://console.groq.com/keys *(free tier: 14,400 req/day)*
+- Telegram → https://my.telegram.org → API development tools
+
+---
+
+## Multi-User
+
+JobHunt is built multi-user from the ground up. Each user:
+- Logs in with their own account
+- Connects their own Telegram (API keys + OTP)
+- Gets their own job feed, channels, and profile
+- Session stored encrypted in DB — survives server redeploys
+
+Share the link with friends. Everyone gets their own isolated dashboard.
+
+---
+
+## Deployment (Render)
+
+```bash
+# 1. Push to GitHub
+git push origin main
+
+# 2. Create Render Web Service
+# Build: pip install -r requirements.txt && playwright install chromium
+# Start: python run.py
+
+# 3. Create Render PostgreSQL (free tier)
+# Copy Internal Database URL → set as DATABASE_URL env var
+# Change postgres:// → postgresql+asyncpg://
+
+# 4. Set environment variables in Render dashboard:
+# SECRET_KEY, FERNET_KEY, GROQ_API_KEY, DATABASE_URL, ALLOWED_ORIGINS
+```
+
+---
+
+## What I'd Add Next
+
+- **Email notifications** when a high-match job (>80%) is scraped
+- **Resume parser** to auto-fill skills from uploaded PDF
+- **Private channel support** via invite link
+- **Weekly digest** — top 10 matches emailed every Monday
+- **Mobile app** — React Native wrapper around the same API
+
+---
+
+## Troubleshooting
 
 | Problem | Fix |
-|---|---|
-| `No module named telethon` | `pip install telethon tgcrypto` |
-| `FloodWaitError` from Telegram | Scraper polling too fast — increase interval |
-| Session expired | Re-run `python scraper/telegram_scraper.py --auth` |
-| SMTP auth failed | Use Gmail App Password, not your login password |
-| Playwright not found | `playwright install chromium` |
-| No jobs showing | Check channels are added and try `--once` manually |
+|---------|-----|
+| `No session for user` | Go to Telegram Setup → reconnect |
+| `0 jobs after scrape` | Join channels in Telegram app first, then scrape |
+| Enrich shows 0% | Fill your profile with skills first, then click Enrich |
+| Site takes 50s to load | Free Render tier sleeps — set up UptimeRobot to keep it awake |
+| `pydantic-core` build error | Add `PYTHON_VERSION=3.11.9` to Render env vars |
+
+---
+
+*Part of my AI developer portfolio. See also: [SalesAgent](https://github.com/ayush-s-tomar/salesagent) — autonomous B2B sales AI with LangGraph.*
