@@ -99,7 +99,7 @@ async def scrape_for_user(user_id: int, api_id: int, api_hash: str, channels: li
                             apply_url   = url,
                             apply_type  = "email" if email else ("url" if url else "manual"),
                             is_remote   = "remote" in msg.text.lower(),
-                            posted_at   = msg.date,
+                            posted_at   = msg.date.replace(tzinfo=None),
                         )
                         db.add(job)
                         new_jobs += 1
