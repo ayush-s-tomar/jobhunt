@@ -36,6 +36,32 @@ def main():
 
         scheduler = BackgroundScheduler()
         scheduler.add_job(run_scraper, IntervalTrigger(minutes=interval))
+
+        # Daily junk cleaner
+        from apscheduler.triggers.interval import IntervalTrigger as IT
+        async def clean_junk():
+            from sqlalchemy.ext.asyncio import create_async_engine
+            from sqlalchemy import text
+            engine = create_async_engine(os.getenv("DATABASE_URL"))
+            async with engine.begin() as conn:
+                result = await conn.execute(text("""
+                    DELETE FROM jobs WHERE
+                    raw_text ILIKE '%free course%' OR
+                    raw_text ILIKE '%certificate%' OR
+                    raw_text ILIKE '%udemy%' OR
+                    raw_text ILIKE '%masterclass%' OR
+                    raw_text ILIKE '%enroll now%' OR
+                    raw_text ILIKE '%placement support%' OR
+                    raw_text ILIKE '%online course%' OR
+                    title IS NULL OR
+                    length(raw_text) < 100
+                """))
+                log.info(f"🧹 Auto-cleaned {result.rowcount} junk posts")
+
+        def run_cleanup():
+            asyncio.run(clean_junk())
+
+        scheduler.add_job(run_cleanup, IntervalTrigger(hours=24))
         scheduler.start()
         log.info(f"✅ Scraper scheduled every {interval} minutes")
 
