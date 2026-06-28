@@ -178,10 +178,11 @@ async def telegram_verify(
     """Verify OTP and complete Telegram connection."""
     phone = decrypt(current_user.tg_phone)
     result = await verify_otp(
-        user_id         = current_user.id,
-        phone           = phone,
-        code            = body.code.strip(),
-        phone_code_hash = body.phone_code_hash,
+        user_id          = current_user.id,
+        phone            = phone,
+        code             = body.code.strip(),
+        phone_code_hash  = body.phone_code_hash,
+        db               = db,
     )
     if not result["ok"]:
         raise HTTPException(400, result["error"])

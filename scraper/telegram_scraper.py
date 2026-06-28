@@ -55,12 +55,16 @@ def parse_title(text):
 
 async def scrape_for_user(user_id: int, api_id: int, api_hash: str, channels: list):
     """Scrape all channels for a specific user using their session."""
-    session_path = str(SESSIONS_DIR / str(user_id))
-    if not Path(f"{session_path}.session").exists():
-        log.error(f"No session for user {user_id}")
-        return
-
-    client = TelegramClient(session_path, api_id, api_hash)
+    from telethon.sessions import StringSession
+    from backend.auth import decrypt
+    async with AsyncSessionLocal() as db:
+        from backend.database import User
+        user = await db.get(User, user_id)
+        if not user or not user.tg_session:
+            log.error(f"No session for user {user_id}")
+            return
+        session_string = decrypt(user.tg_session)
+    client = TelegramClient(StringSession(session_string), api_id, api_hash)
     try:
         await client.connect()
         if not await client.is_user_authorized():

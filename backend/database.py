@@ -34,7 +34,7 @@ class User(Base):
     tg_api_id       = Column(Text, nullable=True)    # encrypted
     tg_api_hash     = Column(Text, nullable=True)    # encrypted
     tg_phone        = Column(Text, nullable=True)    # encrypted
-    tg_connected    = Column(Boolean, default=False)
+    tg_session      = Column(Text, nullable=True)    # encrypted StringSession
 
     profile     = relationship("UserProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
     channels    = relationship("Channel", back_populates="user", cascade="all, delete-orphan")

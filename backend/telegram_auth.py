@@ -1,47 +1,50 @@
 """
 telegram_auth.py
 ─────────────────
-Handles per-user Telegram authentication flow:
-  1. User enters their api_id, api_hash, phone → stored encrypted
-  2. We initiate a Telethon session → Telegram sends OTP to their app
-  3. User enters OTP → session saved to data/sessions/{user_id}.session
-  4. Scraper can now poll channels using that session
+Handles per-user Telegram authentication flow.
+Session is stored in the DATABASE (not filesystem) so it survives Render redeploys.
 """
-import os, asyncio, logging
+import os, logging
 from pathlib import Path
 from telethon import TelegramClient
+from telethon.sessions import StringSession
 from telethon.errors import SessionPasswordNeededError, PhoneCodeInvalidError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 log = logging.getLogger(__name__)
+
+# Temp dir for pending auth only (not persisted)
 SESSIONS_DIR = Path("data/sessions")
 SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 # In-memory store for pending auth clients (user_id → TelegramClient)
-# These are short-lived — created during OTP flow, disposed after
 _pending_clients: dict[int, TelegramClient] = {}
-
-
-def session_path(user_id: int) -> str:
-    return str(SESSIONS_DIR / str(user_id))
+_pending_strings: dict[int, str] = {}  # stores StringSession during OTP flow
 
 
 def has_session(user_id: int) -> bool:
-    return Path(f"{session_path(user_id)}.session").exists()
+    """Check if user has a session string stored (checked via DB in scraper)."""
+    return Path(f"data/sessions/{user_id}.session").exists() or user_id in _pending_strings
+
+
+async def has_db_session(user_id: int, db: AsyncSession) -> bool:
+    """Check if user has a session string in the database."""
+    from backend.database import User
+    user = await db.get(User, user_id)
+    return bool(user and user.tg_session)
 
 
 async def send_otp(user_id: int, api_id: int, api_hash: str, phone: str) -> dict:
-    """
-    Start Telethon client for this user and request OTP.
-    Returns {"ok": True, "phone_code_hash": "..."} on success.
-    """
-    # Clean up any existing pending client for this user
+    """Start Telethon client and request OTP using StringSession."""
     if user_id in _pending_clients:
         try:
             await _pending_clients[user_id].disconnect()
         except Exception:
             pass
 
-    client = TelegramClient(session_path(user_id), api_id, api_hash)
+    # Use StringSession so we can store it in DB later
+    client = TelegramClient(StringSession(), api_id, api_hash)
     try:
         await client.connect()
         result = await client.send_code_request(phone)
@@ -53,26 +56,35 @@ async def send_otp(user_id: int, api_id: int, api_hash: str, phone: str) -> dict
         return {"ok": False, "error": str(e)}
 
 
-async def verify_otp(user_id: int, phone: str, code: str, phone_code_hash: str) -> dict:
-    """
-    Submit OTP and complete authentication.
-    Session file is saved automatically by Telethon.
-    """
+async def verify_otp(user_id: int, phone: str, code: str, phone_code_hash: str, db: AsyncSession) -> dict:
+    """Submit OTP, save session string to database."""
+    from backend.database import User
+    from backend.auth import encrypt
+
     client = _pending_clients.get(user_id)
     if not client:
         return {"ok": False, "error": "No pending auth session. Request OTP again."}
-
     try:
         await client.sign_in(phone=phone, code=code, phone_code_hash=phone_code_hash)
         me = await client.get_me()
+
+        # Save session string to database (encrypted)
+        session_string = client.session.save()
         await client.disconnect()
         del _pending_clients[user_id]
-        log.info(f"User {user_id} authenticated as @{me.username}")
+
+        # Store in user record
+        user = await db.get(User, user_id)
+        if user:
+            user.tg_session = encrypt(session_string)
+            await db.commit()
+
+        log.info(f"User {user_id} authenticated as @{me.username}, session saved to DB")
         return {"ok": True, "telegram_username": me.username or me.first_name}
     except PhoneCodeInvalidError:
         return {"ok": False, "error": "Invalid OTP code. Try again."}
     except SessionPasswordNeededError:
-        return {"ok": False, "error": "2FA enabled on this Telegram account. Disable it temporarily or use an account without 2FA."}
+        return {"ok": False, "error": "2FA enabled. Disable it temporarily or use an account without 2FA."}
     except Exception as e:
         log.error(f"verify_otp error for user {user_id}: {e}")
         return {"ok": False, "error": str(e)}
