@@ -82,6 +82,33 @@ def check_password():
 if not check_password():
     st.stop()
 
+# ── Type-safety helpers ───────────────────────────────────────────────
+# Groq doesn't always honor the schema exactly — it can return skills_required
+# as a comma-separated string instead of a list, or is_remote as "true"/"false"
+# strings instead of a real bool. These normalize whatever comes back so
+# json.dumps() / int() never crash on it.
+def coerce_skills_list(value) -> list:
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    if isinstance(value, str):
+        return [s.strip() for s in value.split(",") if s.strip()]
+    return []
+
+def coerce_bool_int(value) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (int, float)):
+        return int(bool(value))
+    if isinstance(value, str):
+        return int(value.strip().lower() in ("true", "yes", "1", "remote"))
+    return 0
+
+def coerce_score(value) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
 # ── Groq helpers ───────────────────────────────────────────────────────
 def enrich_job(raw_text: str, profile: dict) -> dict:
     if not groq_client:
@@ -367,14 +394,17 @@ with tab_feed:
                 for i, job in enumerate(pending):
                     data = enrich_job(job["raw_text"], profile)
                     if data:
+                        skills_required_val = coerce_skills_list(data.get("skills_required", []))
+                        is_remote_val = coerce_bool_int(data.get("is_remote", False))
+                        score_val = coerce_score(data.get("score", 0))
                         conn.execute("""
                             UPDATE jobs SET title=?, company=?, location=?, salary=?,
                             skills_required=?, is_remote=?, match_score=? WHERE id=?
                         """, (
                             data.get("title") or job["title"], data.get("company") or job["company"],
                             data.get("location") or job["location"], data.get("salary") or job["salary"],
-                            json.dumps(data.get("skills_required", [])), int(data.get("is_remote", False)),
-                            float(data.get("score", 0)), job["id"]
+                            json.dumps(skills_required_val), is_remote_val,
+                            score_val, job["id"]
                         ))
                         conn.commit()
                     bar.progress((i + 1) / len(pending), text=f"Enriched {i+1}/{len(pending)}")
