@@ -450,9 +450,7 @@ with tab_feed:
             if skills: st.caption(", ".join(skills[:6]))
 
             with st.expander("Raw post + actions"):
-                import re
-                clean_text = re.sub(r"\*{3,}", "**", j["raw_text"][:1000])  # collapse 3+ asterisks to a clean bold pair
-                clean_text = re.sub(r"\*\*\s*\*\*", "", clean_text)  # remove empty bold pairs left behind
+                clean_text = j["raw_text"][:1000].replace("**", "")
                 st.markdown(clean_text)
                 b1, b2, b3, b4 = st.columns(4)
                 if b1.button("🔖 Save", key=f"save_{j['id']}"):
