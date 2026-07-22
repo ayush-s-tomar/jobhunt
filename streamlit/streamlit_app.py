@@ -450,7 +450,7 @@ with tab_feed:
             if skills: st.caption(", ".join(skills[:6]))
 
             with st.expander("Raw post + actions"):
-                st.text(j["raw_text"][:1000])
+                st.markdown(j["raw_text"][:1000])
                 b1, b2, b3, b4 = st.columns(4)
                 if b1.button("🔖 Save", key=f"save_{j['id']}"):
                     conn.execute("UPDATE jobs SET status='saved' WHERE id=?", (j["id"],))
