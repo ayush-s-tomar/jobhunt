@@ -1,11 +1,18 @@
 """
 JobHunt — Streamlit Edition
 Single-user demo build. See README_STREAMLIT.md for what changed vs the FastAPI version.
+
+v2 additions:
+  - Optional Supabase Postgres persistence (falls back to ephemeral SQLite if unset)
+  - Kanban-style application tracker (Board tab)
+  - Duplicate job detection (same title+company posted across channels)
+  - Telegram digest of new high-match jobs (manual trigger + cron-friendly script)
 """
-import os, json, sqlite3, asyncio, time
-from datetime import datetime
+import os, json, sqlite3, asyncio, time, re
+from datetime import datetime, timedelta
 from pathlib import Path
 
+import requests
 import streamlit as st
 from groq import Groq
 from cryptography.fernet import Fernet
@@ -16,7 +23,17 @@ st.set_page_config(page_title="JobHunt", page_icon="📡", layout="wide")
 APP_PASSWORD = st.secrets.get("APP_PASSWORD", "")
 GROQ_API_KEY = st.secrets.get("GROQ_API_KEY", os.getenv("GROQ_API_KEY", ""))
 FERNET_KEY   = st.secrets.get("FERNET_KEY", os.getenv("FERNET_KEY", ""))
-DB_PATH      = "jobhunt.db"  # ephemeral on Streamlit Cloud — see README
+
+# Set SUPABASE_DB_URL in secrets (postgresql://...) to switch on persistence.
+# Leave unset and the app falls back to ephemeral SQLite, same as before.
+SUPABASE_DB_URL = st.secrets.get("SUPABASE_DB_URL", os.getenv("SUPABASE_DB_URL", ""))
+USE_POSTGRES = bool(SUPABASE_DB_URL)
+
+# Set these to enable the "Send digest now" button / cron script.
+TELEGRAM_BOT_TOKEN = st.secrets.get("TELEGRAM_BOT_TOKEN", os.getenv("TELEGRAM_BOT_TOKEN", ""))
+TELEGRAM_DIGEST_CHAT_ID = st.secrets.get("TELEGRAM_DIGEST_CHAT_ID", os.getenv("TELEGRAM_DIGEST_CHAT_ID", ""))
+
+DB_PATH = "jobhunt.db"  # sqlite fallback path — ephemeral on Streamlit Cloud
 
 fernet = Fernet(FERNET_KEY.encode()) if FERNET_KEY else None
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
@@ -27,40 +44,93 @@ COMBINED_SYSTEM = """Parse this job post and score the candidate match. Return O
 COVER_SYSTEM = """Write a concise cover letter (150-200 words) for a software developer in India.
 No fluff. Tailor it to the job. Plain text only. Don't start with "I am writing to..."."""
 
-# ── DB (sync sqlite — single user, no user_id scoping needed) ────────────
+# ── DB layer — SQLite (demo) or Supabase Postgres (persistent) ───────────
+# ConnWrapper lets a psycopg2 connection support the same chaining pattern
+# sqlite3.Connection gives us: conn.execute(sql, params).fetchone()/.fetchall()
+if USE_POSTGRES:
+    import psycopg2
+    import psycopg2.extras
+    IntegrityErrors = (psycopg2.IntegrityError,)
+
+    class ConnWrapper:
+        def __init__(self, raw_conn):
+            self._conn = raw_conn
+
+        def execute(self, sql, params=()):
+            cur = self._conn.cursor()
+            cur.execute(sql.replace("?", "%s"), params)
+            return cur
+
+        def commit(self):
+            self._conn.commit()
+
+        def rollback(self):
+            self._conn.rollback()
+
+        def close(self):
+            self._conn.close()
+else:
+    IntegrityErrors = (sqlite3.IntegrityError,)
+
+
 def get_conn():
+    if USE_POSTGRES:
+        raw = psycopg2.connect(SUPABASE_DB_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+        return ConnWrapper(raw)
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
+
+def _add_column_if_missing(conn, table, coldef):
+    """Idempotent ALTER TABLE, safe to call every startup on old + new DBs."""
+    if USE_POSTGRES:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {coldef}")
+        conn.commit()
+    else:
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {coldef}")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+
+
 def init_db():
     conn = get_conn()
-    conn.executescript("""
-    CREATE TABLE IF NOT EXISTS channels (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE, title TEXT, is_private INTEGER DEFAULT 0,
-        job_count INTEGER DEFAULT 0, last_polled TEXT
-    );
-    CREATE TABLE IF NOT EXISTS jobs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        channel_id INTEGER, message_id INTEGER, raw_text TEXT,
-        title TEXT, company TEXT, location TEXT, salary TEXT,
-        skills_required TEXT DEFAULT '[]', apply_email TEXT, apply_url TEXT,
-        is_remote INTEGER DEFAULT 0, match_score REAL DEFAULT 0,
-        status TEXT DEFAULT 'new', cover_letter TEXT,
-        posted_at TEXT, scraped_at TEXT
-    );
-    CREATE TABLE IF NOT EXISTS profile (
-        id INTEGER PRIMARY KEY CHECK (id=1),
-        full_name TEXT, phone TEXT, linkedin TEXT, github TEXT,
-        portfolio TEXT, years_exp REAL DEFAULT 0, skills TEXT DEFAULT '[]', summary TEXT
-    );
-    CREATE TABLE IF NOT EXISTS tg_creds (
-        id INTEGER PRIMARY KEY CHECK (id=1),
-        api_id TEXT, api_hash TEXT, phone TEXT, session_str TEXT
-    );
-    """)
+    pk = "SERIAL PRIMARY KEY" if USE_POSTGRES else "INTEGER PRIMARY KEY AUTOINCREMENT"
+    stmts = [
+        f"""CREATE TABLE IF NOT EXISTS channels (
+            id {pk},
+            username TEXT UNIQUE, title TEXT, is_private INTEGER DEFAULT 0,
+            job_count INTEGER DEFAULT 0, last_polled TEXT
+        )""",
+        f"""CREATE TABLE IF NOT EXISTS jobs (
+            id {pk},
+            channel_id INTEGER, message_id INTEGER, raw_text TEXT,
+            title TEXT, company TEXT, location TEXT, salary TEXT,
+            skills_required TEXT DEFAULT '[]', apply_email TEXT, apply_url TEXT,
+            is_remote INTEGER DEFAULT 0, match_score REAL DEFAULT 0,
+            status TEXT DEFAULT 'new', cover_letter TEXT,
+            posted_at TEXT, scraped_at TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS profile (
+            id INTEGER PRIMARY KEY CHECK (id=1),
+            full_name TEXT, phone TEXT, linkedin TEXT, github TEXT,
+            portfolio TEXT, years_exp REAL DEFAULT 0, skills TEXT DEFAULT '[]', summary TEXT
+        )""",
+        """CREATE TABLE IF NOT EXISTS tg_creds (
+            id INTEGER PRIMARY KEY CHECK (id=1),
+            api_id TEXT, api_hash TEXT, phone TEXT, session_str TEXT
+        )""",
+    ]
+    for s in stmts:
+        conn.execute(s)
     conn.commit()
+
+    # Migrations for DBs created before duplicate detection / digest existed
+    _add_column_if_missing(conn, "jobs", "duplicate_of INTEGER")
+    _add_column_if_missing(conn, "jobs", "digested INTEGER DEFAULT 0")
+
     conn.close()
 
 init_db()
@@ -108,6 +178,61 @@ def coerce_score(value) -> float:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+# ── Duplicate detection ───────────────────────────────────────────────
+def _normalize_key(title, company):
+    def clean(s):
+        return re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).strip()
+    return f"{clean(title)}|{clean(company)}"
+
+def find_duplicate(conn, job_id, title, company):
+    """Same normalized title+company, scraped in the last 21 days, not itself
+    already a duplicate. Returns the id of the original if one is found."""
+    if not title or not company:
+        return None
+    key = _normalize_key(title, company)
+    cutoff = (datetime.utcnow() - timedelta(days=21)).isoformat()
+    candidates = conn.execute(
+        "SELECT id, title, company FROM jobs WHERE id != ? AND duplicate_of IS NULL AND scraped_at >= ?",
+        (job_id, cutoff)
+    ).fetchall()
+    for c in candidates:
+        if _normalize_key(c["title"], c["company"]) == key:
+            return c["id"]
+    return None
+
+# ── Telegram digest ───────────────────────────────────────────────────
+def send_digest(conn, min_score=70, limit=10):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_DIGEST_CHAT_ID:
+        return False, "Set TELEGRAM_BOT_TOKEN and TELEGRAM_DIGEST_CHAT_ID in secrets first."
+    jobs = conn.execute(
+        "SELECT * FROM jobs WHERE status='new' AND match_score>=? AND digested=0 "
+        "ORDER BY match_score DESC LIMIT ?",
+        (min_score, limit)
+    ).fetchall()
+    if not jobs:
+        return False, "No new high-match jobs to send."
+
+    lines = [f"📡 JobHunt Digest — {len(jobs)} new match(es)\n"]
+    for j in jobs:
+        lines.append(f"• {j['title'] or 'Job Opening'} — {j['company'] or 'Unknown'} ({j['match_score']:.0f}% match)")
+    text = "\n".join(lines)
+
+    try:
+        resp = requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+            json={"chat_id": TELEGRAM_DIGEST_CHAT_ID, "text": text},
+            timeout=10,
+        )
+        resp.raise_for_status()
+    except Exception as e:
+        return False, f"Send failed: {e}"
+
+    ids = [j["id"] for j in jobs]
+    placeholders = ",".join(["?"] * len(ids))
+    conn.execute(f"UPDATE jobs SET digested=1 WHERE id IN ({placeholders})", ids)
+    conn.commit()
+    return True, f"Sent digest with {len(jobs)} job(s)."
 
 # ── Groq helpers ───────────────────────────────────────────────────────
 def enrich_job(raw_text: str, profile: dict) -> dict:
@@ -223,13 +348,20 @@ def tg_scrape_channels(api_id, api_hash, session_str, channels, limit_per_channe
 st.title("📡 JobHunt")
 st.caption("Telegram job aggregator + AI scoring — Streamlit demo build")
 
-if DB_PATH == "jobhunt.db":
-    st.info("Demo mode: data resets when this app sleeps or redeploys (Streamlit Cloud has ephemeral disk). "
-            "For persistence, point this at Supabase Postgres.", icon="ℹ️")
+with st.expander("ℹ️ About this build", expanded=False):
+    if USE_POSTGRES:
+        st.caption("Connected to Supabase Postgres — data persists across sleeps and redeploys.")
+    else:
+        st.caption(
+            "Running on ephemeral SQLite — data resets when this app sleeps or redeploys "
+            "(Streamlit Cloud has ephemeral disk). Set SUPABASE_DB_URL in secrets to persist data."
+        )
 
 conn = get_conn()
 
-tab_feed, tab_channels, tab_profile, tab_telegram = st.tabs(["📋 Job Feed", "📡 Channels", "👤 Profile", "🔌 Telegram Setup"])
+tab_feed, tab_board, tab_channels, tab_profile, tab_telegram = st.tabs(
+    ["📋 Job Feed", "📊 Board", "📡 Channels", "👤 Profile", "🔌 Telegram Setup"]
+)
 
 # ── Profile tab ───────────────────────────────────────────────────────
 with tab_profile:
@@ -343,7 +475,8 @@ with tab_channels:
                              (username, username, int(is_private)))
                 conn.commit()
                 st.success(f"Added {username}")
-            except sqlite3.IntegrityError:
+            except IntegrityErrors:
+                conn.rollback()
                 st.warning("Channel already added")
 
     channels = conn.execute("SELECT * FROM channels").fetchall()
@@ -372,49 +505,101 @@ with tab_channels:
     if not connected:
         st.caption("Connect Telegram in the Telegram Setup tab first")
 
+# ── Board tab (Kanban tracker) ────────────────────────────────────────
+PIPELINE_STAGES = ["saved", "applied", "interview", "offer", "rejected"]
+STAGE_LABELS = {
+    "saved": "🔖 Saved", "applied": "📤 Applied", "interview": "🗣️ Interview",
+    "offer": "🎉 Offer", "rejected": "❌ Rejected",
+}
+
+with tab_board:
+    st.caption("Jobs move here once you save or apply to them from the Job Feed tab.")
+    board_cols = st.columns(len(PIPELINE_STAGES))
+    for col, stage in zip(board_cols, PIPELINE_STAGES):
+        with col:
+            st.markdown(f"**{STAGE_LABELS[stage]}**")
+            stage_jobs = conn.execute(
+                "SELECT * FROM jobs WHERE status=? ORDER BY scraped_at DESC", (stage,)
+            ).fetchall()
+            st.caption(f"{len(stage_jobs)} job(s)")
+            idx = PIPELINE_STAGES.index(stage)
+            for j in stage_jobs:
+                with st.container(border=True):
+                    st.markdown(f"**{j['title'] or 'Job Opening'}**")
+                    st.caption(j["company"] or "Unknown")
+                    b1, b2 = st.columns(2)
+                    if idx > 0 and b1.button("←", key=f"back_{stage}_{j['id']}"):
+                        conn.execute("UPDATE jobs SET status=? WHERE id=?",
+                                     (PIPELINE_STAGES[idx - 1], j["id"]))
+                        conn.commit(); st.rerun()
+                    if idx < len(PIPELINE_STAGES) - 1 and b2.button("→", key=f"fwd_{stage}_{j['id']}"):
+                        conn.execute("UPDATE jobs SET status=? WHERE id=?",
+                                     (PIPELINE_STAGES[idx + 1], j["id"]))
+                        conn.commit(); st.rerun()
+
 # ── Feed tab ──────────────────────────────────────────────────────────
 with tab_feed:
     c1, c2, c3 = st.columns([2, 1, 1])
     search = c1.text_input("🔍 Search jobs, skills, companies…")
-    status_filter = c2.selectbox("Status", ["all", "new", "saved", "applied", "interview", "rejected"])
+    status_filter = c2.selectbox(
+        "Status", ["all", "new", "saved", "applied", "interview", "offer", "rejected", "duplicate"]
+    )
     min_score = c3.slider("Min match %", 0, 100, 0)
 
-    if st.button("✨ Enrich pending jobs", type="primary"):
-        profile = get_profile_dict()
-        if not profile:
-            st.warning("Fill your profile first")
-        else:
-            pending = conn.execute(
-                "SELECT * FROM jobs WHERE match_score=0 AND status='new' LIMIT 50"
-            ).fetchall()
-            if not pending:
-                st.info("Nothing pending to enrich")
+    action_col1, action_col2 = st.columns([1, 1])
+    with action_col1:
+        if st.button("✨ Enrich pending jobs", type="primary"):
+            profile = get_profile_dict()
+            if not profile:
+                st.warning("Fill your profile first")
             else:
-                bar = st.progress(0, text=f"Enriching {len(pending)} jobs…")
-                for i, job in enumerate(pending):
-                    data = enrich_job(job["raw_text"], profile)
-                    if data:
-                        skills_required_val = coerce_skills_list(data.get("skills_required", []))
-                        is_remote_val = coerce_bool_int(data.get("is_remote", False))
-                        score_val = coerce_score(data.get("score", 0))
-                        conn.execute("""
-                            UPDATE jobs SET title=?, company=?, location=?, salary=?,
-                            skills_required=?, is_remote=?, match_score=? WHERE id=?
-                        """, (
-                            data.get("title") or job["title"], data.get("company") or job["company"],
-                            data.get("location") or job["location"], data.get("salary") or job["salary"],
-                            json.dumps(skills_required_val), is_remote_val,
-                            score_val, job["id"]
-                        ))
-                        conn.commit()
-                    bar.progress((i + 1) / len(pending), text=f"Enriched {i+1}/{len(pending)}")
-                    time.sleep(1)  # rate limit
-                st.success(f"Enriched {len(pending)} jobs")
-                st.rerun()
+                pending = conn.execute(
+                    "SELECT * FROM jobs WHERE match_score=0 AND status='new' LIMIT 50"
+                ).fetchall()
+                if not pending:
+                    st.info("Nothing pending to enrich")
+                else:
+                    bar = st.progress(0, text=f"Enriching {len(pending)} jobs…")
+                    for i, job in enumerate(pending):
+                        data = enrich_job(job["raw_text"], profile)
+                        if data:
+                            skills_required_val = coerce_skills_list(data.get("skills_required", []))
+                            is_remote_val = coerce_bool_int(data.get("is_remote", False))
+                            score_val = coerce_score(data.get("score", 0))
+                            new_title = data.get("title") or job["title"]
+                            new_company = data.get("company") or job["company"]
+                            conn.execute("""
+                                UPDATE jobs SET title=?, company=?, location=?, salary=?,
+                                skills_required=?, is_remote=?, match_score=? WHERE id=?
+                            """, (
+                                new_title, new_company,
+                                data.get("location") or job["location"], data.get("salary") or job["salary"],
+                                json.dumps(skills_required_val), is_remote_val,
+                                score_val, job["id"]
+                            ))
+                            conn.commit()
+
+                            dup_id = find_duplicate(conn, job["id"], new_title, new_company)
+                            if dup_id:
+                                conn.execute(
+                                    "UPDATE jobs SET status='duplicate', duplicate_of=? WHERE id=?",
+                                    (dup_id, job["id"])
+                                )
+                                conn.commit()
+                        bar.progress((i + 1) / len(pending), text=f"Enriched {i+1}/{len(pending)}")
+                        time.sleep(1)  # rate limit
+                    st.success(f"Enriched {len(pending)} jobs")
+                    st.rerun()
+    with action_col2:
+        if st.button("📨 Send digest now"):
+            ok, msg = send_digest(conn)
+            (st.success if ok else st.warning)(msg)
 
     q = "SELECT * FROM jobs WHERE 1=1"
     params = []
-    if status_filter != "all":
+    if status_filter == "all":
+        q += " AND status != 'duplicate'"
+    else:
         q += " AND status=?"
         params.append(status_filter)
     if search:
@@ -439,6 +624,9 @@ with tab_feed:
             score = j["match_score"] or 0
             c3.markdown(f"**{score:.0f}% match**")
             st.progress(min(score / 100, 1.0))
+
+            if j["status"] == "duplicate" and j["duplicate_of"]:
+                st.caption(f"🔁 Possible duplicate of job #{j['duplicate_of']}")
 
             meta = []
             if j["salary"]: meta.append(f"💰 {j['salary']}")
@@ -475,6 +663,11 @@ with tab_feed:
                     if s1.button("🗣️ Got interview", key=f"int_{j['id']}"):
                         conn.execute("UPDATE jobs SET status='interview' WHERE id=?", (j["id"],)); conn.commit(); st.rerun()
                     if s2.button("❌ Rejected", key=f"rej_{j['id']}"):
+                        conn.execute("UPDATE jobs SET status='rejected' WHERE id=?", (j["id"],)); conn.commit(); st.rerun()
+                elif j["status"] == "interview":
+                    if s1.button("🎉 Got offer", key=f"offer_{j['id']}"):
+                        conn.execute("UPDATE jobs SET status='offer' WHERE id=?", (j["id"],)); conn.commit(); st.rerun()
+                    if s2.button("❌ Rejected", key=f"rejint_{j['id']}"):
                         conn.execute("UPDATE jobs SET status='rejected' WHERE id=?", (j["id"],)); conn.commit(); st.rerun()
                 elif j["status"] in ("saved", "confirmed"):
                     if s1.button("📤 Mark applied", key=f"appl_{j['id']}"):

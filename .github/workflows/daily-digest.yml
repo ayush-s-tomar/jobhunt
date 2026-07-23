@@ -1,0 +1,21 @@
+name: JobHunt Daily Digest
+
+on:
+  schedule:
+    - cron: "30 3 * * *"   # 09:00 IST daily — adjust for your timezone (this is UTC)
+  workflow_dispatch: {}     # lets you trigger it manually from the Actions tab too
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install requests psycopg2-binary
+      - run: python digest_cron.py
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_DIGEST_CHAT_ID: ${{ secrets.TELEGRAM_DIGEST_CHAT_ID }}
