@@ -38,7 +38,9 @@ DB_PATH = "jobhunt.db"  # sqlite fallback path — ephemeral on Streamlit Cloud
 fernet = Fernet(FERNET_KEY.encode()) if FERNET_KEY else None
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
-MODEL = "llama-3.3-70b-versatile"
+# llama-3.1-8b-instant: free tier, much higher daily token cap than 70b-versatile,
+# and plenty capable for structured extraction/scoring tasks like this one.
+MODEL = "llama-3.1-8b-instant"
 COMBINED_SYSTEM = """Parse this Telegram post. It may or may not be an actual job opening — some
 channels mix in course ads, promo links, and generic career-advice posts. Only treat it as a job
 if it names a specific role and/or hiring company.
@@ -245,12 +247,51 @@ def send_digest(conn, min_score=70, limit=10):
     return True, f"Sent digest with {len(jobs)} job(s)."
 
 # ── Groq helpers ───────────────────────────────────────────────────────
+class RateLimited(Exception):
+    """Raised when Groq returns a 429 that isn't worth retrying (e.g. daily
+    token cap hit — no amount of short backoff will fix that)."""
+    pass
+
+def _extract_json(text: str) -> dict:
+    """Groq sometimes wraps JSON in markdown fences, or adds a stray
+    character before/after the object. Strip fences, then grab the first
+    {...} block by brace-matching instead of trusting the whole string to
+    be valid JSON on its own."""
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("```")[1]
+        if text.startswith("json"):
+            text = text[4:]
+        text = text.strip()
+
+    # Brace-match from the first '{' to find a clean, complete JSON object,
+    # even if there's junk before/after it.
+    start = text.find("{")
+    if start == -1:
+        raise json.JSONDecodeError("No JSON object found", text, 0)
+    depth = 0
+    for i, ch in enumerate(text[start:], start):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return json.loads(text[start:i + 1])
+    # Fell off the end without balancing — fall back to letting json.loads
+    # raise its normal (informative) error on the best-guess slice.
+    return json.loads(text[start:])
+
 def enrich_job(raw_text: str, profile: dict) -> dict:
+    """Returns a dict on success, {} on a non-fatal per-job failure (bad
+    JSON etc — safe to keep going to the next job), and raises RateLimited
+    when Groq's daily/rate cap is hit so the caller can stop the whole batch
+    instead of burning through retries on every remaining job."""
     if not groq_client:
         return {}
     profile_summary = f"Skills: {', '.join(profile.get('skills', []))}\nExp: {profile.get('years_exp', 0)}yrs\nSummary: {profile.get('summary', '')}"
     prompt = f"JOB:\n{raw_text[:1500]}\n\nCANDIDATE:\n{profile_summary}"
-    for attempt in range(3):
+    last_err = None
+    for attempt in range(2):
         try:
             resp = groq_client.chat.completions.create(
                 model=MODEL, max_tokens=400,
@@ -258,17 +299,28 @@ def enrich_job(raw_text: str, profile: dict) -> dict:
                           {"role": "user", "content": prompt}]
             )
             text = resp.choices[0].message.content.strip()
-            if text.startswith("```"):
-                text = text.split("```")[1]
-                if text.startswith("json"):
-                    text = text[4:]
-            return json.loads(text)
+            return _extract_json(text)
+        except json.JSONDecodeError as e:
+            # Malformed response from the model — retry once, then give up
+            # on just this job (not the whole batch).
+            last_err = e
+            continue
         except Exception as e:
-            if "429" in str(e) and attempt < 2:
-                time.sleep(3 * (attempt + 1))
-            else:
-                st.warning(f"Enrich failed: {e}")
-                return {}
+            msg = str(e)
+            if "429" in msg:
+                # If it's a token-per-day cap, "Please try again in Xm" will
+                # be minutes away — not worth waiting inline. Stop the batch.
+                if "tokens per day" in msg.lower() or "tpd" in msg.lower():
+                    raise RateLimited(msg)
+                # Otherwise it's a short per-minute limit — one brief backoff
+                # is worth trying before giving up on this job.
+                if attempt == 0:
+                    time.sleep(3)
+                    continue
+                raise RateLimited(msg)
+            last_err = e
+            break
+    st.warning(f"Enrich failed for one job, skipped: {last_err}")
     return {}
 
 def generate_cover_letter(job_text: str, profile: dict) -> str:
@@ -570,8 +622,19 @@ with tab_feed:
                     st.info("Nothing pending to enrich")
                 else:
                     bar = st.progress(0, text=f"Enriching {len(pending)} jobs…")
+                    enriched_count = 0
+                    stopped_for_rate_limit = False
                     for i, job in enumerate(pending):
-                        data = enrich_job(job["raw_text"], profile)
+                        try:
+                            data = enrich_job(job["raw_text"], profile)
+                        except RateLimited as e:
+                            stopped_for_rate_limit = True
+                            st.warning(
+                                f"Stopped after {enriched_count}/{len(pending)} — Groq daily/rate "
+                                f"limit reached. Try again later, or switch MODEL to a smaller one. ({e})"
+                            )
+                            break
+
                         if data:
                             skills_required_val = coerce_skills_list(data.get("skills_required", []))
                             is_remote_val = coerce_bool_int(data.get("is_remote", False))
@@ -606,9 +669,11 @@ with tab_feed:
                                         (dup_id, job["id"])
                                     )
                                     conn.commit()
+                        enriched_count += 1
                         bar.progress((i + 1) / len(pending), text=f"Enriched {i+1}/{len(pending)}")
                         time.sleep(1)  # rate limit
-                    st.success(f"Enriched {len(pending)} jobs")
+                    if not stopped_for_rate_limit:
+                        st.success(f"Enriched {enriched_count} jobs")
                     st.rerun()
     with action_col2:
         if st.button("📨 Send digest now"):
