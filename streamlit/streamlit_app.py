@@ -39,7 +39,17 @@ fernet = Fernet(FERNET_KEY.encode()) if FERNET_KEY else None
 groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 MODEL = "llama-3.3-70b-versatile"
-COMBINED_SYSTEM = """Parse this job post and score the candidate match. Return ONLY valid JSON, no markdown:
+COMBINED_SYSTEM = """Parse this Telegram post. It may or may not be an actual job opening — some
+channels mix in course ads, promo links, and generic career-advice posts. Only treat it as a job
+if it names a specific role and/or hiring company.
+
+If it is NOT a real job posting (e.g. a course ad, "enroll now" promo, generic skills/career
+content with no specific role or employer), return title=null, company=null, and score=0 — do not
+guess or invent values.
+
+If it IS a real job posting, extract the fields and score the candidate match normally.
+
+Return ONLY valid JSON, no markdown:
 {"title":string|null,"company":string|null,"location":string|null,"salary":string|null,"skills_required":[],"is_remote":bool,"apply_email":string|null,"apply_url":string|null,"score":0-100}"""
 COVER_SYSTEM = """Write a concise cover letter (150-200 words) for a software developer in India.
 No fluff. Tailor it to the job. Plain text only. Don't start with "I am writing to..."."""
@@ -542,7 +552,7 @@ with tab_feed:
     c1, c2, c3 = st.columns([2, 1, 1])
     search = c1.text_input("🔍 Search jobs, skills, companies…")
     status_filter = c2.selectbox(
-        "Status", ["all", "new", "saved", "applied", "interview", "offer", "rejected", "duplicate"]
+        "Status", ["all", "new", "saved", "applied", "interview", "offer", "rejected", "duplicate", "not_a_job"]
     )
     min_score = c3.slider("Min match %", 0, 100, 0)
 
@@ -566,26 +576,36 @@ with tab_feed:
                             skills_required_val = coerce_skills_list(data.get("skills_required", []))
                             is_remote_val = coerce_bool_int(data.get("is_remote", False))
                             score_val = coerce_score(data.get("score", 0))
-                            new_title = data.get("title") or job["title"]
-                            new_company = data.get("company") or job["company"]
-                            conn.execute("""
-                                UPDATE jobs SET title=?, company=?, location=?, salary=?,
-                                skills_required=?, is_remote=?, match_score=? WHERE id=?
-                            """, (
-                                new_title, new_company,
-                                data.get("location") or job["location"], data.get("salary") or job["salary"],
-                                json.dumps(skills_required_val), is_remote_val,
-                                score_val, job["id"]
-                            ))
-                            conn.commit()
+                            new_title = data.get("title")
+                            new_company = data.get("company")
 
-                            dup_id = find_duplicate(conn, job["id"], new_title, new_company)
-                            if dup_id:
+                            if not new_title and not new_company:
+                                # Not an actual job post (course ad, promo, etc.) — tag it so
+                                # it's filterable and never shows up as a mystery "Unknown" listing.
                                 conn.execute(
-                                    "UPDATE jobs SET status='duplicate', duplicate_of=? WHERE id=?",
-                                    (dup_id, job["id"])
+                                    "UPDATE jobs SET status='not_a_job', match_score=0 WHERE id=?",
+                                    (job["id"],)
                                 )
                                 conn.commit()
+                            else:
+                                conn.execute("""
+                                    UPDATE jobs SET title=?, company=?, location=?, salary=?,
+                                    skills_required=?, is_remote=?, match_score=? WHERE id=?
+                                """, (
+                                    new_title or job["title"], new_company or job["company"],
+                                    data.get("location") or job["location"], data.get("salary") or job["salary"],
+                                    json.dumps(skills_required_val), is_remote_val,
+                                    score_val, job["id"]
+                                ))
+                                conn.commit()
+
+                                dup_id = find_duplicate(conn, job["id"], new_title, new_company)
+                                if dup_id:
+                                    conn.execute(
+                                        "UPDATE jobs SET status='duplicate', duplicate_of=? WHERE id=?",
+                                        (dup_id, job["id"])
+                                    )
+                                    conn.commit()
                         bar.progress((i + 1) / len(pending), text=f"Enriched {i+1}/{len(pending)}")
                         time.sleep(1)  # rate limit
                     st.success(f"Enriched {len(pending)} jobs")
@@ -598,7 +618,8 @@ with tab_feed:
     q = "SELECT * FROM jobs WHERE 1=1"
     params = []
     if status_filter == "all":
-        q += " AND status != 'duplicate'"
+        q += " AND status NOT IN ('duplicate', 'not_a_job')"
+        q += " AND NOT (title IS NULL AND company IS NULL)"
     else:
         q += " AND status=?"
         params.append(status_filter)
@@ -627,6 +648,8 @@ with tab_feed:
 
             if j["status"] == "duplicate" and j["duplicate_of"]:
                 st.caption(f"🔁 Possible duplicate of job #{j['duplicate_of']}")
+            if j["status"] == "not_a_job":
+                st.caption("🚫 Not a job posting — likely a course ad or promo, filtered from the main feed")
 
             meta = []
             if j["salary"]: meta.append(f"💰 {j['salary']}")
