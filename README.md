@@ -57,7 +57,7 @@ Jobs are ranked by AI match score — highest matches float to top. Each card sh
 
 ![JobHunt Dashboard Screenshot](assets/demo.png)
 
-🎥 [Watch the full demo video](assets/demo.mp4)
+https://github.com/user-attachments/assets/a41dfeaf-7a10-44ae-b5ec-1953bde9045e
 
 ---
 
