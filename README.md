@@ -30,17 +30,21 @@ Connect your Telegram account. Add job channels. JobHunt scrapes every post, sco
 | 🤖 **Enrich** | Groq AI extracts title, company, salary, skills, apply link |
 | 🎯 **Score** | Matches job requirements against your skills and experience (0–100%) |
 | ✉️ **Apply** | Sends tailored email + resume, or fills forms via Playwright |
+
+```
 Telegram channel posts job
-↓
+         ↓
 Scraper picks it up every 15 min
-↓
+         ↓
 AI enriches: title, company, salary, match score
-↓
+         ↓
 Job appears in dashboard with match %
-↓
-You click "Confirm & Auto-Apply" ← only human step
-↓
+         ↓
+You click "Confirm & Auto-Apply"   ← only human step
+         ↓
 Bot sends email or fills form → Status: Applied ✅
+```
+
 ---
 
 ## Demo
@@ -84,20 +88,24 @@ Jobs are ranked by AI match score — highest matches float to top. Each card sh
 ---
 
 ## Project Structure
+
+```
 jobhunt/
 ├── backend/
-│ ├── database.py # SQLAlchemy models (User, Job, Channel, Application)
-│ ├── auth.py # JWT, bcrypt, Fernet encryption
-│ ├── ai_scorer.py # Groq: parse + score + cover letter
-│ ├── telegram_auth.py # Per-user Telegram OTP flow + session management
-│ └── apply_bot.py # Email sender + Playwright form-filler
+│   ├── database.py          # SQLAlchemy models (User, Job, Channel, Application)
+│   ├── auth.py              # JWT, bcrypt, Fernet encryption
+│   ├── ai_scorer.py         # Groq: parse + score + cover letter
+│   ├── telegram_auth.py     # Per-user Telegram OTP flow + session management
+│   └── apply_bot.py         # Email sender + Playwright form-filler
 ├── scraper/
-│ └── telegram_scraper.py # MTProto scraper, per-user StringSession
+│   └── telegram_scraper.py  # MTProto scraper, per-user StringSession
 ├── frontend/
-│ └── index.html # Full dashboard UI
-├── main.py # All FastAPI routes
-├── run.py # Starts server + scraper scheduler
+│   └── index.html           # Full dashboard UI
+├── main.py                  # All FastAPI routes
+├── run.py                   # Starts server + scraper scheduler
 └── .env.example
+```
+
 ---
 
 ## Run Locally
