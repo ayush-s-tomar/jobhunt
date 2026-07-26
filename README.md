@@ -1,8 +1,14 @@
 # JobHunt — Telegram Job Aggregator + Auto-Apply
 
+![License](https://img.shields.io/badge/license-MIT-green.svg)
+![Python](https://img.shields.io/badge/python-3.11-blue.svg)
+![Streamlit](https://img.shields.io/badge/deployed-Streamlit-FF4B4B.svg)
+![Groq](https://img.shields.io/badge/AI-Groq%20Llama%203.3--70B-orange.svg)
+![CI](https://github.com/ayush-s-tomar/jobhunt/actions/workflows/ci.yml/badge.svg)
+
 > Watches Telegram job channels, scores every post against your profile using Groq AI, and auto-applies with one click.
 
-[🔗 Live Demo](https://jobhunt-lonp.onrender.com) &nbsp;|&nbsp; [👤 LinkedIn](https://www.linkedin.com/in/ayush-s-tomar/)
+[🔗 Live Demo](https://jobhunt-ai.streamlit.app/) &nbsp;|&nbsp; [👤 LinkedIn](https://www.linkedin.com/in/ayush-s-tomar/)
 
 ---
 
@@ -24,30 +30,30 @@ Connect your Telegram account. Add job channels. JobHunt scrapes every post, sco
 | 🤖 **Enrich** | Groq AI extracts title, company, salary, skills, apply link |
 | 🎯 **Score** | Matches job requirements against your skills and experience (0–100%) |
 | ✉️ **Apply** | Sends tailored email + resume, or fills forms via Playwright |
-
-```
 Telegram channel posts job
-         ↓
+↓
 Scraper picks it up every 15 min
-         ↓
+↓
 AI enriches: title, company, salary, match score
-         ↓
+↓
 Job appears in dashboard with match %
-         ↓
-You click "Confirm & Auto-Apply"   ← only human step
-         ↓
+↓
+You click "Confirm & Auto-Apply" ← only human step
+↓
 Bot sends email or fills form → Status: Applied ✅
-```
-
 ---
 
 ## Demo
 
 **439 jobs scraped from 5 channels in under 60 seconds.**
 
-![JobHunt Dashboard](assets/demo.png)
+![JobHunt Demo](assets/demo.gif)
 
 Jobs are ranked by AI match score — highest matches float to top. Each card shows salary, location, company, and a one-click apply button. Real companies like Zoom, Kone, GreyOrange, and Zebra pulled directly from Telegram.
+
+![JobHunt Dashboard Screenshot](assets/demo.png)
+
+🎥 [Watch the full demo video](assets/demo.mp4)
 
 ---
 
@@ -61,7 +67,7 @@ Jobs are ranked by AI match score — highest matches float to top. Each card sh
 | AI | Groq API (`llama-3.3-70b-versatile`) |
 | Form automation | Playwright (Chromium) |
 | Auth | JWT (HttpOnly cookies) + bcrypt passwords + Fernet encryption |
-| Deploy | Render (Web Service + PostgreSQL) |
+| Deploy | Streamlit Community Cloud |
 | Frontend | Vanilla JS + CSS (single HTML file, no build step) |
 
 ---
@@ -78,25 +84,20 @@ Jobs are ranked by AI match score — highest matches float to top. Each card sh
 ---
 
 ## Project Structure
-
-```
 jobhunt/
 ├── backend/
-│   ├── database.py          # SQLAlchemy models (User, Job, Channel, Application)
-│   ├── auth.py              # JWT, bcrypt, Fernet encryption
-│   ├── ai_scorer.py         # Groq: parse + score + cover letter
-│   ├── telegram_auth.py     # Per-user Telegram OTP flow + session management
-│   └── apply_bot.py         # Email sender + Playwright form-filler
+│ ├── database.py # SQLAlchemy models (User, Job, Channel, Application)
+│ ├── auth.py # JWT, bcrypt, Fernet encryption
+│ ├── ai_scorer.py # Groq: parse + score + cover letter
+│ ├── telegram_auth.py # Per-user Telegram OTP flow + session management
+│ └── apply_bot.py # Email sender + Playwright form-filler
 ├── scraper/
-│   └── telegram_scraper.py  # MTProto scraper, per-user StringSession
+│ └── telegram_scraper.py # MTProto scraper, per-user StringSession
 ├── frontend/
-│   └── index.html           # Full dashboard UI
-├── main.py                  # All FastAPI routes
-├── run.py                   # Starts server + scraper scheduler
-├── render.yaml              # Render deployment config
+│ └── index.html # Full dashboard UI
+├── main.py # All FastAPI routes
+├── run.py # Starts server + scraper scheduler
 └── .env.example
-```
-
 ---
 
 ## Run Locally
@@ -143,26 +144,6 @@ Share the link with friends. Everyone gets their own isolated dashboard.
 
 ---
 
-## Deployment (Render)
-
-```bash
-# 1. Push to GitHub
-git push origin main
-
-# 2. Create Render Web Service
-# Build: pip install -r requirements.txt && playwright install chromium
-# Start: python run.py
-
-# 3. Create Render PostgreSQL (free tier)
-# Copy Internal Database URL → set as DATABASE_URL env var
-# Change postgres:// → postgresql+asyncpg://
-
-# 4. Set environment variables in Render dashboard:
-# SECRET_KEY, FERNET_KEY, GROQ_API_KEY, DATABASE_URL, ALLOWED_ORIGINS
-```
-
----
-
 ## What I'd Add Next
 
 - **Email notifications** when a high-match job (>80%) is scraped
@@ -180,8 +161,14 @@ git push origin main
 | `No session for user` | Go to Telegram Setup → reconnect |
 | `0 jobs after scrape` | Join channels in Telegram app first, then scrape |
 | Enrich shows 0% | Fill your profile with skills first, then click Enrich |
-| Site takes 50s to load | Free Render tier sleeps — set up UptimeRobot to keep it awake |
-| `pydantic-core` build error | Add `PYTHON_VERSION=3.11.9` to Render env vars |
+| Site takes a while to load | Streamlit free tier sleeps after inactivity — first load wakes it up |
+| `pydantic-core` build error | Pin `PYTHON_VERSION=3.11.9` in your environment |
+
+---
+
+## License
+
+Released under the [MIT License](LICENSE).
 
 ---
 
