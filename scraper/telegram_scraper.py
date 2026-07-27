@@ -80,7 +80,7 @@ async def scrape_for_user(user_id: int, api_id: int, api_hash: str, channels: li
                 async with AsyncSessionLocal() as db:
                     async for msg in client.iter_messages(entity, limit=100):
                         if not msg.text or len(msg.text) < 100: continue
-if any(x in msg.text.lower() for x in ["free course", "coupon", "udemy", "enroll now", "certificate"]): continue
+                        if any(x in msg.text.lower() for x in ["free course", "coupon", "udemy", "enroll now", "certificate"]): continue
 
                         # Check duplicate
                         dup = await db.execute(
