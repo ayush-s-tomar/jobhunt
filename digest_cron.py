@@ -13,21 +13,31 @@ import requests
 import psycopg2
 import psycopg2.extras
 
-SUPABASE_DB_URL = os.environ["SUPABASE_DB_URL"]
-TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
-TELEGRAM_DIGEST_CHAT_ID = os.environ["TELEGRAM_DIGEST_CHAT_ID"]
+SUPABASE_DB_URL = os.environ.get("SUPABASE_DB_URL")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+TELEGRAM_DIGEST_CHAT_ID = os.environ.get("TELEGRAM_DIGEST_CHAT_ID")
 MIN_SCORE = float(os.environ.get("DIGEST_MIN_SCORE", 70))
 LIMIT = int(os.environ.get("DIGEST_LIMIT", 10))
 
+REQUIRED = {
+    "SUPABASE_DB_URL": SUPABASE_DB_URL,
+    "TELEGRAM_BOT_TOKEN": TELEGRAM_BOT_TOKEN,
+    "TELEGRAM_DIGEST_CHAT_ID": TELEGRAM_DIGEST_CHAT_ID,
+}
+
 
 def main():
+    missing = [k for k, v in REQUIRED.items() if not v]
+    if missing:
+        raise RuntimeError(f"Missing required env var(s): {', '.join(missing)}")
+
     conn = psycopg2.connect(SUPABASE_DB_URL, cursor_factory=psycopg2.extras.RealDictCursor)
     cur = conn.cursor()
     cur.execute(
         "SELECT id, title, company, match_score FROM jobs "
-        "WHERE status='new' AND match_score>=%s AND digested=0 "
+        "WHERE status='new' AND match_score>=%s AND digested=%s "
         "ORDER BY match_score DESC LIMIT %s",
-        (MIN_SCORE, LIMIT),
+        (MIN_SCORE, False, LIMIT),
     )
     jobs = cur.fetchall()
 
@@ -48,7 +58,7 @@ def main():
     resp.raise_for_status()
 
     ids = tuple(j["id"] for j in jobs)
-    cur.execute("UPDATE jobs SET digested=1 WHERE id IN %s", (ids,))
+    cur.execute("UPDATE jobs SET digested=%s WHERE id IN %s", (True, ids))
     conn.commit()
     print(f"Sent digest with {len(jobs)} job(s).")
 
