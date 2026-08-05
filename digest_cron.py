@@ -33,16 +33,23 @@ def main():
 
     conn = psycopg2.connect(SUPABASE_DB_URL, cursor_factory=psycopg2.extras.RealDictCursor)
     cur = conn.cursor()
+
+    # NOTE: `digested` is stored as an integer (0/1) in this table, not a
+    # real boolean column — so we pass 0/1 here instead of Python True/False.
+    # (psycopg2 adapts True/False to the SQL literals true/false, which
+    # Postgres won't implicitly compare against an integer column.)
     cur.execute(
         "SELECT id, title, company, match_score FROM jobs "
         "WHERE status='new' AND match_score>=%s AND digested=%s "
         "ORDER BY match_score DESC LIMIT %s",
-        (MIN_SCORE, False, LIMIT),
+        (MIN_SCORE, 0, LIMIT),
     )
     jobs = cur.fetchall()
 
     if not jobs:
         print("No new high-match jobs to send.")
+        cur.close()
+        conn.close()
         return
 
     lines = [f"📡 JobHunt Digest — {len(jobs)} new match(es)\n"]
@@ -50,16 +57,25 @@ def main():
         lines.append(f"• {j['title'] or 'Job Opening'} — {j['company'] or 'Unknown'} ({j['match_score']:.0f}% match)")
     text = "\n".join(lines)
 
-    resp = requests.post(
-        f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-        json={"chat_id": TELEGRAM_DIGEST_CHAT_ID, "text": text},
-        timeout=10,
-    )
-    resp.raise_for_status()
+    try:
+        resp = requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+            json={"chat_id": TELEGRAM_DIGEST_CHAT_ID, "text": text},
+            timeout=10,
+        )
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        # Don't mark jobs as digested if the Telegram send failed —
+        # otherwise they'd be silently skipped in future runs.
+        cur.close()
+        conn.close()
+        raise RuntimeError(f"Telegram send failed: {e}") from e
 
     ids = tuple(j["id"] for j in jobs)
-    cur.execute("UPDATE jobs SET digested=%s WHERE id IN %s", (True, ids))
+    cur.execute("UPDATE jobs SET digested=%s WHERE id IN %s", (1, ids))
     conn.commit()
+    cur.close()
+    conn.close()
     print(f"Sent digest with {len(jobs)} job(s).")
 
 
