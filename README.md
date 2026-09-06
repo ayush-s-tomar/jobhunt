@@ -12,6 +12,12 @@
 
 ---
 
+## 📚 Contents
+
+[The Problem](#the-problem) · [What It Does](#what-it-does) · [Demo](#demo) · [Architecture](#architecture) · [Tech Stack](#tech-stack) · [Security](#security) · [Run Locally](#run-locally) · [Multi-User](#multi-user) · [Roadmap](#what-id-add-next) · [Troubleshooting](#troubleshooting)
+
+---
+
 ## The Problem
 
 Indian job seekers manually check 10+ Telegram job channels every day, copy-paste apply links, and repeat the same cover letter with minor tweaks. Hours wasted. Opportunities missed.
@@ -58,6 +64,22 @@ Jobs are ranked by AI match score — highest matches float to top. Each card sh
 ![JobHunt Dashboard Screenshot](assets/demo.png)
 
 https://github.com/user-attachments/assets/a41dfeaf-7a10-44ae-b5ec-1953bde9045e
+
+> **Note:** the hosted demo above is a stripped-down single-user build (no auth, no background scraper) so it runs free on Streamlit Cloud. The full multi-user system — FastAPI + Postgres + per-user Telegram sessions — is described below and in `/backend`.
+
+---
+
+## Architecture
+
+FastAPI backend with a scheduled scraper running alongside the API process, not as a separate worker — kept intentionally simple for a single free-tier deploy target. Each user's Telegram session (StringSession) is Fernet-encrypted and stored per-row in Postgres, so scraping resumes correctly after a redeploy instead of forcing a re-login.
+
+```
+Telethon scraper (MTProto) → Groq enrichment/scoring → PostgreSQL → FastAPI → dashboard
+                                                              ↑
+                                           per-user encrypted Telegram session
+```
+
+**Design trade-off:** auto-apply defaults to a human-confirm step before any email or form submission goes out — deliberately not fully autonomous, since a bad auto-send (wrong resume, wrong company) is worse than a missed job.
 
 ---
 
@@ -171,6 +193,13 @@ Share the link with friends. Everyone gets their own isolated dashboard.
 | Enrich shows 0% | Fill your profile with skills first, then click Enrich |
 | Site takes a while to load | Streamlit free tier sleeps after inactivity — first load wakes it up |
 | `pydantic-core` build error | Pin `PYTHON_VERSION=3.11.9` in your environment |
+
+---
+
+## Author
+
+**Ayush Singh Tomar** — AI/ML Developer
+[GitHub](https://github.com/ayush-s-tomar) · [LinkedIn](https://www.linkedin.com/in/ayush-s-tomar/)
 
 ---
 
