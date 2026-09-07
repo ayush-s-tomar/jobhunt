@@ -6,72 +6,72 @@
 ![Groq](https://img.shields.io/badge/AI-Groq%20Llama%203.3--70B-orange.svg)
 ![CI](https://github.com/ayush-s-tomar/jobhunt/actions/workflows/ci.yml/badge.svg)
 
-> Watches Telegram job channels, scores every post against your profile using Groq AI, and auto-applies with one click.
+**JobHunt watches your Telegram job channels, scores every post against your profile with AI, and applies for you with one click.**
 
-[🔗 Live Demo](https://jobhunt-ai.streamlit.app/) &nbsp;|&nbsp; [👤 LinkedIn](https://www.linkedin.com/in/ayush-s-tomar/)
+439 jobs scraped from 5 channels in under 60 seconds — ranked, scored, ready to apply.
+
+[🔗 Live Demo](https://jobhunt-ai.streamlit.app/) &nbsp;|&nbsp; [👤 LinkedIn](https://www.linkedin.com/in/ayush-s-tomar/) &nbsp;|&nbsp; [📹 Video](https://github.com/user-attachments/assets/a41dfeaf-7a10-44ae-b5ec-1953bde9045e)
 
 ---
 
 ## 📚 Contents
 
-[The Problem](#the-problem) · [What It Does](#what-it-does) · [Demo](#demo) · [Architecture](#architecture) · [Tech Stack](#tech-stack) · [Security](#security) · [Run Locally](#run-locally) · [Multi-User](#multi-user) · [Roadmap](#what-id-add-next) · [Troubleshooting](#troubleshooting)
+[The Problem](#the-problem) · [What It Does](#what-it-does) · [Demo](#demo) · [Architecture](#architecture) · [Tech Stack](#tech-stack) · [Security](#security) · [Run Locally](#run-locally) · [Multi-User](#multi-user) · [Roadmap](#roadmap) · [Troubleshooting](#troubleshooting)
 
 ---
 
 ## The Problem
 
-Indian job seekers manually check 10+ Telegram job channels every day, copy-paste apply links, and repeat the same cover letter with minor tweaks. Hours wasted. Opportunities missed.
+Indian job seekers manually check 10+ Telegram job channels a day, copy-paste apply links, and retype the same cover letter with minor tweaks. Hours wasted. Good openings missed because nobody saw the post in time.
 
-**JobHunt automates the entire pipeline — from Telegram post to submitted application.**
+**JobHunt automates the whole pipeline — from Telegram post to submitted application.**
 
 ---
 
 ## What It Does
 
-Connect your Telegram account. Add job channels. JobHunt scrapes every post, scores it against your profile using AI, and lets you apply in one click.
+Connect your Telegram account. Add job channels. JobHunt scrapes every post, scores it against your profile with AI, and lets you apply in one click.
 
 | Step | What happens |
 |------|-------------|
 | 📡 **Scrape** | Polls your Telegram channels every 15 minutes via MTProto |
 | 🤖 **Enrich** | Groq AI extracts title, company, salary, skills, apply link |
 | 🎯 **Score** | Matches job requirements against your skills and experience (0–100%) |
-| ✉️ **Apply** | Sends tailored email + resume, or fills forms via Playwright |
+| ✉️ **Apply** | Sends a tailored email + resume, or fills the form via Playwright |
 
 ```
-Telegram channel posts job
+Telegram channel posts a job
          ↓
 Scraper picks it up every 15 min
          ↓
-AI enriches: title, company, salary, match score
+Groq AI enriches: title, company, salary, match score
          ↓
-Job appears in dashboard with match %
+Job appears in dashboard, ranked by match %
          ↓
-You click "Confirm & Auto-Apply"   ← only human step
+You click "Confirm & Auto-Apply"   ← the only human step
          ↓
-Bot sends email or fills form → Status: Applied ✅
+Bot sends email or fills the form → Status: Applied ✅
 ```
 
 ---
 
 ## Demo
 
-**439 jobs scraped from 5 channels in under 60 seconds.**
+![JobHunt dashboard ranking scraped jobs by AI match score](assets/demo.png)
 
-![JobHunt Demo](assets/demo.gif)
+![JobHunt scraping and scoring jobs in real time](assets/demo.gif)
 
-Jobs are ranked by AI match score — highest matches float to top. Each card shows salary, location, company, and a one-click apply button. Real companies like Zoom, Kone, GreyOrange, and Zebra pulled directly from Telegram.
+Jobs are ranked by AI match score — the best fits float to the top. Each card shows salary, location, company, and a one-click apply button. Real listings from companies like Zoom, Kone, GreyOrange, and Zebra, pulled straight from Telegram.
 
-![JobHunt Dashboard Screenshot](assets/demo.png)
+<!-- TODO: screenshot of a sent application (email draft or filled-form confirmation) — shows the actual output, not just the dashboard leading up to it. Highest-impact addition here. -->
 
-https://github.com/user-attachments/assets/a41dfeaf-7a10-44ae-b5ec-1953bde9045e
-
-> **Note:** the hosted demo above is a stripped-down single-user build (no auth, no background scraper) so it runs free on Streamlit Cloud. The full multi-user system — FastAPI + Postgres + per-user Telegram sessions — is described below and in `/backend`.
+> **Note:** the hosted demo is a stripped-down single-user build — no auth, no background scraper, no live auto-apply — so it runs free on Streamlit Cloud. The full multi-user system in [Multi-User](#multi-user) below lives in `/backend` and requires self-hosting with Postgres.
 
 ---
 
 ## Architecture
 
-FastAPI backend with a scheduled scraper running alongside the API process, not as a separate worker — kept intentionally simple for a single free-tier deploy target. Each user's Telegram session (StringSession) is Fernet-encrypted and stored per-row in Postgres, so scraping resumes correctly after a redeploy instead of forcing a re-login.
+FastAPI backend with a scheduled scraper running alongside the API process rather than as a separate worker — kept intentionally simple for a single free-tier deploy target. Each user's Telegram session (`StringSession`) is Fernet-encrypted and stored per-row in Postgres, so scraping resumes correctly after a redeploy instead of forcing a re-login.
 
 ```
 Telethon scraper (MTProto) → Groq enrichment/scoring → PostgreSQL → FastAPI → dashboard
@@ -79,7 +79,7 @@ Telethon scraper (MTProto) → Groq enrichment/scoring → PostgreSQL → FastAP
                                            per-user encrypted Telegram session
 ```
 
-**Design trade-off:** auto-apply defaults to a human-confirm step before any email or form submission goes out — deliberately not fully autonomous, since a bad auto-send (wrong resume, wrong company) is worse than a missed job.
+**Design trade-off:** auto-apply defaults to a human-confirm step before any email or form submission goes out. Deliberately not fully autonomous — a bad auto-send (wrong resume, wrong company) is worse than a missed job.
 
 ---
 
@@ -100,11 +100,11 @@ Telethon scraper (MTProto) → Groq enrichment/scoring → PostgreSQL → FastAP
 
 ## Security
 
-- Passwords → bcrypt hashed (never stored plain)
-- Telegram API keys → Fernet encrypted before hitting DB
-- Telegram sessions → StringSession stored encrypted in DB (survives redeploys)
+- Passwords → bcrypt hashed, never stored plain
+- Telegram API keys → Fernet encrypted before hitting the DB
+- Telegram sessions → `StringSession` stored encrypted in DB (survives redeploys)
 - JWT tokens → HttpOnly cookies (XSS-proof), 30-day expiry
-- All routes → user_id scoped (no cross-user data leaks)
+- All routes → `user_id` scoped, no cross-user data leaks
 - Rate limiting → 5 login attempts/min, 3 registrations/hour per IP
 
 ---
@@ -164,23 +164,24 @@ python run.py
 
 ## Multi-User
 
-JobHunt is built multi-user from the ground up. Each user:
+The self-hosted backend (`/backend`) is built multi-user from the ground up — this is not enabled in the free Streamlit demo above. Each user:
+
 - Logs in with their own account
 - Connects their own Telegram (API keys + OTP)
 - Gets their own job feed, channels, and profile
-- Session stored encrypted in DB — survives server redeploys
+- Has a session stored encrypted in the DB — survives server redeploys
 
-Share the link with friends. Everyone gets their own isolated dashboard.
+Deploy `/backend` with Postgres and share the link — everyone gets their own isolated dashboard.
 
 ---
 
-## What I'd Add Next
+## Roadmap
 
-- **Email notifications** when a high-match job (>80%) is scraped
-- **Resume parser** to auto-fill skills from uploaded PDF
-- **Private channel support** via invite link
-- **Weekly digest** — top 10 matches emailed every Monday
-- **Mobile app** — React Native wrapper around the same API
+- [ ] **Email notifications** when a high-match job (>80%) is scraped
+- [ ] **Resume parser** to auto-fill skills from an uploaded PDF
+- [ ] **Private channel support** via invite link
+- [ ] **Weekly digest** — top 10 matches emailed every Monday
+- [ ] **Mobile app** — React Native wrapper around the same API
 
 ---
 
@@ -189,7 +190,7 @@ Share the link with friends. Everyone gets their own isolated dashboard.
 | Problem | Fix |
 |---------|-----|
 | `No session for user` | Go to Telegram Setup → reconnect |
-| `0 jobs after scrape` | Join channels in Telegram app first, then scrape |
+| `0 jobs after scrape` | Join the channels in the Telegram app first, then scrape |
 | Enrich shows 0% | Fill your profile with skills first, then click Enrich |
 | Site takes a while to load | Streamlit free tier sleeps after inactivity — first load wakes it up |
 | `pydantic-core` build error | Pin `PYTHON_VERSION=3.11.9` in your environment |
