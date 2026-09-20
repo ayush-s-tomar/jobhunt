@@ -16,7 +16,7 @@
 
 ## 📚 Contents
 
-[The Problem](#the-problem) · [What It Does](#what-it-does) · [Demo](#demo) · [Architecture](#architecture) · [Tech Stack](#tech-stack) · [Security](#security) · [Run Locally](#run-locally) · [Multi-User](#multi-user) · [Roadmap](#roadmap) · [Troubleshooting](#troubleshooting)
+[The Problem](#the-problem) · [What It Does](#what-it-does) · [Demo](#demo) · [Architecture](#architecture) · [Tech Stack](#tech-stack) · [Security](#security) · [Run Locally](#run-locally) · [Multi-User](#multi-user) · [Known Limitations](#known-limitations) · [Roadmap](#roadmap) · [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -64,8 +64,6 @@ Bot sends email or fills the form → Status: Applied ✅
 Jobs are ranked by AI match score — the best fits float to the top. Each card shows salary, location, company, and a one-click apply button. Real listings from companies like Zoom, Kone, GreyOrange, and Zebra, pulled straight from Telegram.
 
 <!-- TODO: screenshot of a sent application (email draft or filled-form confirmation) — shows the actual output, not just the dashboard leading up to it. Highest-impact addition here. -->
-
-> **Note:** the hosted demo is a stripped-down single-user build — no auth, no background scraper, no live auto-apply — so it runs free on Streamlit Cloud. The full multi-user system in [Multi-User](#multi-user) below lives in `/backend` and requires self-hosting with Postgres.
 
 ---
 
@@ -175,6 +173,14 @@ Deploy `/backend` with Postgres and share the link — everyone gets their own i
 
 ---
 
+## Known Limitations
+
+- **The hosted demo is intentionally stripped down** — no auth, no background scraper, no live auto-apply — so it runs free on Streamlit Cloud. The full multi-user system with real auto-apply lives in `/backend` and requires self-hosting with Postgres (see [Multi-User](#multi-user)).
+- **Free-tier cold starts** — Streamlit's free tier sleeps after inactivity, so the first request after idle can take a while to wake up (see [Troubleshooting](#troubleshooting)).
+- **Human-confirm is required, not optional** — by design (see the trade-off note in [Architecture](#architecture)), so JobHunt won't send anything unattended even if you want fully autonomous applying.
+
+---
+
 ## Roadmap
 
 - [ ] **Email notifications** when a high-match job (>80%) is scraped
@@ -200,7 +206,7 @@ Deploy `/backend` with Postgres and share the link — everyone gets their own i
 ## Author
 
 **Ayush Singh Tomar** — AI/ML Developer
-[GitHub](https://github.com/ayush-s-tomar) · [LinkedIn](https://www.linkedin.com/in/ayush-s-tomar/)
+[GitHub](https://github.com/ayush-s-tomar) · [LinkedIn](https://www.linkedin.com/in/ayush-s-tomar/) · [Portfolio](https://ayush-s-tomar.vercel.app)
 
 ---
 
