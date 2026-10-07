@@ -1,5 +1,12 @@
 # JobHunt — Telegram Job Aggregator + Auto-Apply
 
+<!-- TODO (verify before anything else): Groq shut down llama-3.3-70b-versatile on 2026-08-16.
+This README's Tech Stack still names it, and the staged portfolio fix plan only covered
+AgentLoop and SalesAgent — JobHunt was never confirmed migrated. If backend/ai_scorer.py still
+calls this model ID, every scrape's enrichment/scoring/cover-letter step is failing right now,
+not just degraded. Migrate to openai/gpt-oss-120b (Groq's named replacement), confirm the live
+demo actually scores a job end-to-end, then update the model name below and in Architecture. -->
+
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Python](https://img.shields.io/badge/python-3.11-blue.svg)
 ![Streamlit](https://img.shields.io/badge/deployed-Streamlit-FF4B4B.svg)
@@ -88,7 +95,7 @@ Telethon scraper (MTProto) → Groq enrichment/scoring → PostgreSQL → FastAP
 | Backend | FastAPI + SQLAlchemy |
 | Database | PostgreSQL (production) / SQLite (local) |
 | Telegram | Telethon (MTProto) — per-user sessions stored encrypted in DB |
-| AI | Groq API (`llama-3.3-70b-versatile`) |
+| AI | Groq API (`llama-3.3-70b-versatile` — **deprecated by Groq 2026-08-16, migration unconfirmed, see TODO at top**) |
 | Form automation | Playwright (Chromium) |
 | Auth | JWT (HttpOnly cookies) + bcrypt passwords + Fernet encryption |
 | Deploy | Streamlit Community Cloud |
@@ -175,6 +182,7 @@ Deploy `/backend` with Postgres and share the link — everyone gets their own i
 
 ## Known Limitations
 
+- **AI scoring may currently be broken.** The Groq model this project calls (`llama-3.3-70b-versatile`) was deprecated on 2026-08-16. Migration status is unconfirmed as of this writing — see the TODO at the top of this file before relying on the live demo's scoring.
 - **The hosted demo is intentionally stripped down** — no auth, no background scraper, no live auto-apply — so it runs free on Streamlit Cloud. The full multi-user system with real auto-apply lives in `/backend` and requires self-hosting with Postgres (see [Multi-User](#multi-user)).
 - **Free-tier cold starts** — Streamlit's free tier sleeps after inactivity, so the first request after idle can take a while to wake up (see [Troubleshooting](#troubleshooting)).
 - **Human-confirm is required, not optional** — by design (see the trade-off note in [Architecture](#architecture)), so JobHunt won't send anything unattended even if you want fully autonomous applying.
